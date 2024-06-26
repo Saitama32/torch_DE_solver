@@ -1,0 +1,39 @@
+import os
+import json
+import pandas as pd
+
+def read_json_files(folder_path):
+    data_list = []
+    for filename in os.listdir(folder_path):
+        if not filename.endswith('.png'):
+            file_path = os.path.join(folder_path, filename)
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+                data_list.append(data)
+    return data_list
+
+def convert_to_dataframe(data_list):
+    # Предположим, что все словари имеют одинаковую структуру
+    df = pd.DataFrame(data_list)
+    return df
+
+def save_to_excel(df, output_path):
+    df.to_excel(output_path, index=False)
+
+def main():
+    folder_path = r"C:\Users\Рустам\Desktop\ИТМО\Лаба\Композитный интеллект\test\Burgers\10_частиц_старая версия"# Укажите путь к папке с JSON файлами
+    output_path = '10_частиц_старая версия.xlsx'  # Укажите путь для сохранения Excel файла
+
+    # Чтение JSON файлов из папки
+    data_list = read_json_files(folder_path)
+
+    # Конвертация данных в DataFrame
+    df = convert_to_dataframe(data_list)
+
+    # Сохранение данных в Excel файл
+    save_to_excel(df, output_path)
+
+    print(f'Data successfully saved to {output_path}')
+
+if __name__ == "__main__":
+    main()
