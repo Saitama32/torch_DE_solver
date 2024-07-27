@@ -11,7 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname('tedeous'), '..')))
 from tedeous.data import Domain, Conditions, Equation
 from tedeous.model_test import Model
 from tedeous.callbacks import early_stopping, plot
-from tedeous.optimizers.optimizer import Optimizer
+from tedeous.optimizers.optimizer_test import Optimizer
 from tedeous.device import solver_device, check_device
 from tedeous.models import mat_model
 from tedeous.data_handler import save_data_and_graph
@@ -98,7 +98,7 @@ def exact(grid):
 
 
 ## model part
-for i in range(10):
+for i in range(1):
     if mode in ('NN', 'autograd'):
         net = torch.nn.Sequential(
             torch.nn.Linear(2, 10),
@@ -147,7 +147,8 @@ for i in range(10):
 # print('RMSE_grad= ', error_rmse.item())
 
 
-    optimizer = Optimizer('PSO', {'pop_size': 10,
+    optimizer = Optimizer('PSO', {'pop_size': 100
+                                  ,
                                 'b': 0.5,
                                 'c2': 0.05,
                                 'variance': 5e-3,
@@ -170,7 +171,7 @@ for i in range(10):
 
     model.dict_of_learning['RMSE_pso'] = error_rmse.item()
 
-    save_data_and_graph.save_data_and_graph(model.dict_of_learning,"Burg_eq", "PSO_old")
+    save_data_and_graph.save_data_and_graph(model.dict_of_learning,"Burg_eq", "CSO")
 
     print('RMSE_pso= ', error_rmse.item()) 
     print('Time_taken= ', tak-tik)
