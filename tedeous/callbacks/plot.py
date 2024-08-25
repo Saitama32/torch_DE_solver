@@ -4,7 +4,7 @@ from typing import Union
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-import torch
+import torch.nn as nn
 from tedeous.callbacks.callback import Callback
 
 
@@ -33,12 +33,16 @@ class Plots(Callback):
         Solution plot for *NN, autograd* mode.
 
         """
+        if isinstance(self.net, nn.Sequential):
+            try:
+                nvars_model = self.net[-1].out_features
+            except:
+                nvars_model = self.net.model[-1].out_features
 
-        try:
-            nvars_model = self.net[-1].out_features
-        except:
-            nvars_model = self.net.model[-1].out_features
+        elif isinstance(self.net, nn.Module):
+            nvars_model = self.net.fc4.out_features
 
+        
         nparams = self.grid.shape[1]
         fig = plt.figure(figsize=(15, 8))
         for i in range(nvars_model):

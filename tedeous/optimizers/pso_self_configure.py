@@ -204,7 +204,7 @@ class PSO(torch.optim.Optimizer):
         self.m1 = self.beta1 * self.m1 + (1 - self.beta1) * self.grads_swarm
         self.m2 = self.beta2 * self.m2 + (1 - self.beta2) * torch.square(
             self.grads_swarm)
-        return self.lr * self.m1 / torch.sqrt(self.m2) + self.epsilon
+        return self.lr * self.m1 / (torch.sqrt(self.m2) + self.epsilon)
 
     def step(self, closure=None) -> torch.Tensor:
         """ It runs ONE step on the particle swarm optimization.

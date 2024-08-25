@@ -4,6 +4,10 @@ from copy import copy
 import numpy as np
 from torch.nn.utils import parameters_to_vector, vector_to_parameters
 from tedeous.device import device_type
+from test.initilization import generate_subspace_based_positions
+# import sys
+# sys.path.append(r"c:\Users\Рустам\Desktop\Стажировка\Темы темщиков\torch_DE_Solver_local")
+from pyDOE import lhs
 
 
 class PSO(torch.optim.Optimizer):
@@ -60,6 +64,8 @@ class PSO(torch.optim.Optimizer):
         self.name = "PSO"
         self.n_iter = n_iter
         self.t = 0
+        self.lower_bound = -1.0
+        self.upper_bound = 1.0
         self.V_max = 1.0 #Max velz
         self.C_max = 1.0
         self.C_min = 0
@@ -112,15 +118,33 @@ class PSO(torch.optim.Optimizer):
             torch.Tensor: The PSO swarm population.
             Each particle represents a neural network (NN, autograd) or model values (mat).
         """
-        vector = self.params_to_vec()
-        matrix = []
-        for _ in range(self.pop_size):
-            matrix.append(vector.reshape(1, -1))
-        matrix = torch.cat(matrix)
-        variance = torch.FloatTensor(self.pop_size, self.vec_shape).uniform_(
-            -self.variance, self.variance).to(device_type())
-        swarm = (matrix + variance).clone().detach().requires_grad_(True)
-        return swarm
+        # vector = self.params_to_vec()
+        # matrix = []
+        # for _ in range(self.pop_size):
+        #     matrix.append(vector.reshape(1, -1))
+        # matrix = torch.cat(matrix)
+        # variance = torch.FloatTensor(self.pop_size, self.vec_shape).uniform_(
+        #     -self.variance, self.variance).to(device_type())
+        # swarm = (matrix + variance)
+        # swarm[0] = matrix[0]
+        # print(swarm[0], matrix[0])
+        # print(swarm.size())
+        
+        # print((self.vec_shape, self.pop_size))
+
+        #testing latin hypercube initilization 
+        # positions = self.lower_bound + (self.upper_bound - self.lower_bound) * lhs(self.vec_shape, self.pop_size)
+        # swarm = torch.tensor(positions, dtype = torch.float32)
+        # print(swarm.size())
+
+        #testin subspace initilization
+        u = 5  # Количество векторов в seed set
+        bounds = [torch.full((self.vec_shape,), -1.0), torch.full((self.vec_shape,), 1.0)]  # Границы пространства от -1 до 1
+        margin = 0.1 * (bounds[1] - bounds[0])  # MARGIN = 10% от диапазона
+        positions = generate_subspace_based_positions(self.pop_size, self.vec_shape, u, bounds, margin)
+        swarm = torch.tensor(positions, dtype = torch.float32)
+
+        return swarm.clone().detach().requires_grad_(True)
 
     def update_pso_params(self) -> None:
         """Method for updating pso parameters if c_decrease=True.
@@ -217,7 +241,7 @@ class PSO(torch.optim.Optimizer):
             self.loss_swarm, self.grads_swarm = closure()
             self.f_p = copy(self.loss_swarm).detach()
             self.g_best = self.p[torch.argmin(self.f_p)]
-            self.evolve_cond = ((self.f_p - torch.min(self.f_p)) / self.f_p).reshape(self.pop_size, 1)
+            #self.evolve_cond = ((self.f_p - torch.min(self.f_p)) / self.f_p).reshape(self.pop_size, 1)
             self.indicator = False
 
         U = list(range(self.pop_size))
@@ -228,6 +252,8 @@ class PSO(torch.optim.Optimizer):
             # Шаг 7: случайный выбор двух частиц
             i, j = np.random.choice(U, 2, replace=False)
             X1, X2 = self.swarm[i], self.swarm[j]
+            matches = torch.all(self.p == self.g_best, dim=1)
+            index = torch.nonzero(matches).squeeze().item()
             
             # Шаг 8: определение победителя и проигравшего
             if self.loss_swarm[i] <= self.loss_swarm[j]:
@@ -245,7 +271,13 @@ class PSO(torch.optim.Optimizer):
             R1, R2, R3 = torch.rand(self.vec_shape), torch.rand(self.vec_shape), torch.rand(self.vec_shape)
             self.v[il] = R1 * self.v[il] + R2 * (Xw - Xl) + 0.1 * R3 * ((Xl + Xw)/2 - Xl)
             Xl_new = Xl + self.v[il]
-            
+            # print(Xl_new)
+            if index == i or index == j:
+                print(i, j, index)
+                print(self.loss_swarm[i], self.loss_swarm[j])
+                # print(self.v[il])
+                # print(Xl)
+                # print(Xl_new)
             # Шаг 15: добавление обновленного проигравшего в P(t + 1)
             # print(next_swarm[il])
             # print(il)
@@ -271,12 +303,14 @@ class PSO(torch.optim.Optimizer):
         # proc_dis = ((1 - self.evolve_cond)**sqrt * (self.g_best - self.p))[0][0]
         
         self.swarm = next_swarm
-        corrected_swarm = torch.where(self.swarm < -1.0, -1.0, self.swarm)  # Если значение меньше -1, устанавливаем -1
-        self.swarm = torch.where(corrected_swarm > 1.0, 1.0, corrected_swarm)
+        corrected_swarm = torch.where(self.swarm < self.lower_bound, self.lower_bound, self.swarm)  # Если значение меньше -1, устанавливаем -1
+        self.swarm = torch.where(corrected_swarm > self.upper_bound, self.upper_bound, corrected_swarm)
 
         if self.use_grad: 
             # print(self.swarm[0])
+            self.loss_swarm, self.grads_swarm = closure()
             #self.swarm[grad_mask] -= self.gradient_descent()[grad_mask]
+            
             self.swarm -= self.gradient_descent()
             # print(self.swarm[0])
             # print(grad_mask[0])
@@ -296,8 +330,11 @@ class PSO(torch.optim.Optimizer):
         # corrected_swarm = torch.where(next_swarm < -1, -1, next_swarm)  # Если значение меньше -1, устанавливаем -1
         # self.swarm = torch.where(corrected_swarm > 1, 1, corrected_swarm)
         
+        
         self.update_p_best()
         self.update_g_best()
+        print(self.loss_swarm)
+        print(self.f_p)
 
         self.update_zero_v()
         self.vec_to_params(self.g_best)
@@ -305,6 +342,7 @@ class PSO(torch.optim.Optimizer):
         #self.update_pso_params()
         
         min_loss =  torch.min(self.f_p)
+        #idx = torch.argwhere(self.f_p == min_loss)
         self.t += 1
 
         # if self.t % 100 == 0 or self.t == 1:
@@ -312,6 +350,9 @@ class PSO(torch.optim.Optimizer):
         # print(self.f_p)
         print(self.loss_swarm.detach())
         print(min_loss)
+        #max_values, _ = torch.max(self.swarm, dim=1)
+        # print(self.swarm[index])
+
         # print(self.evolve_cond[0])
         # print(self.v[0][0].item()Ы, proc_v.item(), proc_c1.item(), proc_c2.item(), proc_dis.item())
         # # print(self.swarm[0])
