@@ -18,42 +18,50 @@ from _aux.PINN_data_aux import LossData, get_PINN
 
 from tedeous.data import Domain, Conditions, Equation
 from tedeous.model import Model
+from tedeous.device import solver_device
 
 
+solver_device('cuda')
 
-mu = 0.01 / np.pi
-###
-#Burgers equation problem describtion
-def u(grid):
-    
-    def f(y):
-        return np.exp(-np.cos(np.pi * y) / (2 * np.pi * mu))
+a = 4
 
-    def integrand1(m, x, t):
-        return np.sin(np.pi * (x - m)) * f(x - m) * np.exp(-m ** 2 / (4 * mu * t))
+def u(x):
+  return torch.sin(torch.pi * a * x)
 
-    def integrand2(m, x, t):
-        return f(x - m) * np.exp(-m ** 2 / (4 * mu * t))
+def u_x(x):
+   return (torch.pi * a) * torch.cos(torch.pi * a * x)
 
-    def u(x, t):
-        if t == 0:
-            return -np.sin(np.pi * x)
-        else:
-            return -quad(integrand1, -np.inf, np.inf, args=(x, t))[0] / quad(integrand2, -np.inf, np.inf, args=(x, t))[
-                0]
-
-    solution = []
-    for point in grid:
-        solution.append(u(point[0].item(), point[1].item()))
-
-    return torch.tensor(solution)
-
+def u_xx(x):
+  return -(torch.pi * a) ** 2 * torch.sin(torch.pi * a * x)
 
 def u_net(net, x):
     net = net.to('cpu')
     x = x.to('cpu')
     return net(x).detach()
 
+def u_net_x(net, x):
+    x = x.to('cpu')
+    net = net.to('cpu')
+    x.requires_grad_()
+    u = net(x)
+    u_x = torch.autograd.grad(sum(u), x)[0]
+    return u_x.detach()
+
+def u_net_xx(net, x):
+    x = x.to('cpu')
+    net = net.to('cpu')
+    x.requires_grad_()
+    u = net(x)
+    u_x = torch.autograd.grad(sum(u), x, create_graph=True)[0]
+    u_xx = torch.autograd.grad(sum(u_x), x)[0]
+    return u_xx.detach()
+
+def c2_norm(net, x):
+    norms = [(u, u_net), (u_x, u_net_x), (u_xx, u_net_xx)]
+    norm = 0
+    for exact, predict in norms:
+        norm += torch.max(abs(exact(x).cpu().reshape(-1) - predict(net, x).cpu().reshape(-1)))
+    return norm.detach().cpu().numpy()
 
 def l2_norm(net, x):
     x = x.to('cpu')
@@ -63,57 +71,66 @@ def l2_norm(net, x):
     l2_norm = torch.sqrt(sum((predict-exact)**2))
     return l2_norm.detach().cpu().numpy()
 
+def l2_norm_mat(net, x):
+    x = x.to('cpu')
+    net = net.to('cpu')
+    predict = net.detach().cpu().reshape(-1)
+    exact = u(x).detach().cpu().reshape(-1)
+    l2_norm = torch.sqrt(sum((predict-exact)**2))
+    return l2_norm.detach().cpu().numpy()
 
-def burgers1d_problem_formulation(grid_res):
-    
+def l2_norm_fourier(net, x):
+    x = x.to(torch.device('cuda:0'))
+    predict = net(x).detach().cpu().reshape(-1)
+    exact = u(x).detach().cpu().reshape(-1)
+    l2_norm = torch.sqrt(sum((predict-exact)**2))
+    return l2_norm.detach().cpu().numpy()
+
+
+
+
+def poisson1d_problem_formulation(grid_res):
+    x0 = 0
+    xmax = 1
+
     domain = Domain()
-    domain.variable('x', [-1, 1], grid_res)
-    domain.variable('t', [0, 1], grid_res)
+
+    domain.variable('x', [x0, xmax], grid_res, dtype='float32')
 
     boundaries = Conditions()
-    x = domain.variable_dict['x']
-    boundaries.dirichlet({'x': [-1, 1], 't': 0}, value=-torch.sin(np.pi * x))
 
-    boundaries.dirichlet({'x': -1, 't': [0, 1]}, value=0)
+    boundaries.dirichlet({'x': x0}, value=u)
+    boundaries.dirichlet({'x': xmax}, value=u)
 
-    boundaries.dirichlet({'x': 1, 't': [0, 1]}, value=0)
+    grid = domain.variable_dict['x'].reshape(-1,1)
+
+    # equation: d2u/dx2 = -16*pi^2*sin(4*pi*x)
 
     equation = Equation()
 
-    burgers_eq = {
-        'du/dt**1':
+    poisson = {
+        '-d2u/dx2':
             {
-                'coeff': 1.,
-                'du/dt': [1],
-                'pow': 1,
-                'var': 0
+            'coeff': -1,
+            'term': [0, 0],
+            'pow': 1,
             },
-        '+u*du/dx':
+
+        'f(x)':
             {
-                'coeff': 1,
-                'u*du/dx': [[None], [0]],
-                'pow': [1, 1],
-                'var': [0, 0]
-            },
-        '-mu*d2u/dx2':
-            {
-                'coeff': -mu,
-                'd2u/dx2': [0, 0],
-                'pow': 1,
-                'var': 0
+            'coeff': u_xx(grid),
+            'term': [None],
+            'pow': 0,
             }
     }
 
-    equation.add(burgers_eq)
-
-    grid = domain.build('autograd')
-
+    equation.add(poisson)
     return grid,domain,equation,boundaries
 
-grid_test = torch.cartesian_prod(torch.linspace(0, 1, 100), torch.linspace(0, 1, 100))
+grid_test = torch.linspace(0, 1, 100).reshape(-1, 1).double()
 u_exact_test = u(grid_test).reshape(-1)
 
-PINN_layers = [2, 32, 32, 1]  # PINN layers
+PINN_layers = [1, 32, 32, 1]  # PINN layers
 
 
 def get_errors(model, error_type, loss_dict):
@@ -222,7 +239,7 @@ if __name__ == '__main__':
     trajectory_coordinates_rec = []
     with torch.no_grad():
         for batch_idx, data in enumerate(trajectory_dataset):
-            data = data.to(device).view(1, -1)
+            data = data.to(device).view(1, -1).float()
 
             x_recon, z = best_model(data)
 
@@ -236,8 +253,8 @@ if __name__ == '__main__':
     trajectory_models = trajectory_models*transform.std + transform.mean
     original_models = original_models*transform.std + transform.mean
 
-    grid, domain, equation, boundaries = burgers1d_problem_formulation(grid_res)
-
+    grid, domain, equation, boundaries = poisson1d_problem_formulation(grid_res)
+    
     trajectory_losses = []
     for i in range(trajectory_models.shape[0]):
         model_flattened = trajectory_models[i, :]
@@ -351,7 +368,7 @@ if __name__ == '__main__':
     abs_errors = (torch.abs(trajectory_losses-original_trajectory_losses))
     ds = []
     for batch_idx, data in enumerate(trajectory_dataset):   
-        data = data.to(device)
+        data = data.to(device).float()
 
         x_recon, z = best_model(data.view(1, -1))
         z = z.view(-1)
