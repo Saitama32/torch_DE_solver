@@ -5,42 +5,42 @@ from typing import Tuple, Union, Any
 from tedeous.input_preprocessing import lambda_prepare
 
 
-class LossData:
+class PINNLossData:
     def __init__(self, solution_cls):
         # Храним экземпляр Solution
         self.solution_cls = solution_cls
 
-    def __getattr__(self, name):
-        # Делегируем вызовы методов и атрибутов к экземпляру Solution
-        return getattr(self.solution_cls, name)
+    # def __getattr__(self, name):
+    #     # Делегируем вызовы методов и атрибутов к экземпляру Solution
+    #     return getattr(self.solution_cls, name)
 
     def evaluate(self, save_graph: bool = True) -> Tuple[torch.Tensor, torch.Tensor]:
         """Custom implementation of evaluate."""
 
         # Используем напрямую атрибуты и методы Solution
 
-        self.op = self.operator.operator_compute()
+        self.op = self.solution_cls.operator.operator_compute()
         self.bval, self.true_bval, \
-        self.bval_keys, self.bval_length = self.boundary.apply_bcs()
+        self.bval_keys, self.bval_length = self.solution_cls.boundary.apply_bcs()
 
         dtype = self.op.dtype
-        self.lambda_operator = lambda_prepare(self.op, self.lambda_operator).to(dtype)
-        self.lambda_bound = lambda_prepare(self.bval, self.lambda_bound).to(dtype)
+        self.lambda_operator = lambda_prepare(self.op.detach(), self.solution_cls.lambda_operator).to(dtype)
+        self.lambda_bound = lambda_prepare(self.bval, self.solution_cls.lambda_bound).to(dtype)
         
-        if self.mode in ('mat', 'autograd'):
+        if self.solution_cls.mode in ('mat', 'autograd'):
             if self.bval is None:
                 print('No bconds is not possible, returning infinite loss')
                 return np.inf
 
-        inputs = [self.op,
+        inputs = [self.op.detach(),
             self.bval,
             self.true_bval,
             self.lambda_operator,
             self.lambda_bound,]
 
-        if self.weak_form is not None and self.weak_form != []:
+        if self.solution_cls.weak_form is not None and self.solution_cls.weak_form != []:
             loss_dict = self._weak_loss(*inputs)
-        elif self.tol != 0:
+        elif self.solution_cls.tol != 0:
             loss_dict = self._causal_loss(*inputs)
         else:
             loss_dict = self._default_loss(*inputs, save_graph)
@@ -62,12 +62,13 @@ class LossData:
             loss_operator (torch.Tensor): operator term in loss.
             op (torch.Tensor): MSE of operator on the whole grid.
         """
-        if self.weak_form is not None and self.weak_form != []:
-            op = operator
-        else:
-            op = torch.mean(operator**2, 0)
+        with torch.no_grad():
+            if self.solution_cls.weak_form is not None and self.solution_cls.weak_form != []:
+                op = operator
+            else:
+                op = torch.mean(operator**2, 0)
 
-        loss_operator = op @ lambda_op.T
+            loss_operator = op @ lambda_op.T
         return loss_operator, op
 
 
@@ -86,10 +87,10 @@ class LossData:
             loss_bnd (torch.Tensor): boundary term in loss.
             bval_diff (torch.Tensor): MSE of all boundary con-s.
         """
+        with torch.no_grad():
+            bval_diff = torch.mean((bval - true_bval)**2, 0)
 
-        bval_diff = torch.mean((bval - true_bval)**2, 0)
-
-        loss_bnd = bval_diff @ lambda_bound.T
+            loss_bnd = bval_diff @ lambda_bound.T
         return loss_bnd, bval_diff
 
 
@@ -139,13 +140,13 @@ class LossData:
             loss = temp_loss
         loss_dict = {
             "loss": loss,
-            "loss_normalized": loss_normalized,
-            "loss_oper": loss_oper,
-            "loss_bnd": loss_bnd,
-            "operator": operator,
-            "bval_diff": bval_diff
+            "loss_normalized": loss_normalized.detach(),
+            "loss_oper": loss_oper.detach(),
+            "loss_bnd": loss_bnd.detach(),
+            "operator": operator.detach(),
+            "bval_diff": bval_diff.detach()
         }
-
+        torch.cuda.empty_cache()
         return loss_dict
 
     def _causal_loss(self,
@@ -191,11 +192,11 @@ class LossData:
 
         loss_dict = {
             "loss": loss,
-            "loss_normalized": loss_normalized,
-            "loss_oper": loss_oper,
-            "loss_bnd": loss_bnd,
-            "operator": operator,
-            "bval_diff": bval_diff
+            "loss_normalized": loss_normalized.detach(),
+            "loss_oper": loss_oper.detach(),
+            "loss_bnd": loss_bnd.detach(),
+            "operator": operator.detach(),
+            "bval_diff": bval_diff.detach()
         }
 
         return loss_dict
@@ -238,11 +239,11 @@ class LossData:
 
         loss_dict = {
             "loss": loss,
-            "loss_normalized": loss_normalized,
-            "loss_oper": loss_oper,
-            "loss_bnd": loss_bnd,
-            "operator": operator,
-            "bval_diff": bval_diff
+            "loss_normalized": loss_normalized.detach(),
+            "loss_oper": loss_oper.detach(),
+            "loss_bnd": loss_bnd.detach(),
+            "operator": operator.detach(),
+            "bval_diff": bval_diff.detach()
         }
 
         return loss_dict

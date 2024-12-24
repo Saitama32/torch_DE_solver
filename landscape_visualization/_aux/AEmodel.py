@@ -7,7 +7,7 @@ import torch
 def get_hidden_layer_sizes(num_of_inputs, num_of_outputs, num_of_layers): 
     if num_of_layers < 2:
         raise ValueError("The number of layers must be at least 2.")
-    if num_of_layers < num_of_layers:
+    if num_of_inputs < num_of_outputs:
         raise ValueError("Input size must be greater than or equal to the output size.")
     
     layer_sizes = np.logspace(np.log10(num_of_inputs), np.log10(num_of_outputs), num_of_layers+2, dtype=int)

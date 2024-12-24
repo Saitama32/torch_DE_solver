@@ -1,4 +1,4 @@
-#### DATA ########
+# This code is partially based on the repository source: https://github.com/elhamod/NeuroVisualizer.git.
 from torch.utils.data import DataLoader, Dataset
 import torch
 import builtins

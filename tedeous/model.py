@@ -168,9 +168,6 @@ class Model():
                 optimizer.scheduler.step()
 
             callbacks.on_epoch_end()
-            if (self.t-1) % 100 == 0:
-                model_path = model_name.format(self.t-1)
-                torch.save(self.net, model_path)  # Сохраняем всю модель
 
             self.t += 1
             if info_string_every is not None:

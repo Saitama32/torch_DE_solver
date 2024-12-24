@@ -1,3 +1,4 @@
+# This code is partially based on the repository source: https://github.com/elhamod/NeuroVisualizer.git.
 import re
 import torch
 import os
@@ -8,7 +9,7 @@ from torch.utils.data import TensorDataset, DataLoader, Dataset
 
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import normalize
-from _aux.trajectories_data import get_trajectory_dataset
+from landscape_visualization._aux.trajectories_data import get_trajectory_dataset
 
 
 #### plotting

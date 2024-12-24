@@ -1,3 +1,4 @@
+# This code is partially based on the repository source: https://github.com/elhamod/NeuroVisualizer.git.
 import torch
 import torch.nn as nn
 
