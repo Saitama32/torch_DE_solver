@@ -222,7 +222,7 @@ class PlotLossSurface:
             equation_model = Model(model_repopulated, domain, equation, boundaries)
             equation_model.compile('autograd', lambda_operator=1/2, lambda_bound=1/2)
             loss_compute = PINNLossData(equation_model.solution_cls)
-            loss_dict = loss_compute.evaluate(save_graph = False)
+            loss_dict = loss_compute.evaluate()
             loss = self.get_errors(model_repopulated, self.loss_type, loss_dict).detach()
             ####
             original_trajectory_losses.append(loss)
