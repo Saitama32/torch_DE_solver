@@ -23,7 +23,7 @@ from tedeous.device import solver_device
 from tedeous.models import mat_model
 import wandb
 
-wandb.login()
+wandb.login(key='ae56768e03b6f06ca029c7b1e40fd300c2769a6d')
 
 run = wandb.init(
     # Set the wandb entity where your project will be logged (generally your team name).
@@ -33,14 +33,15 @@ run = wandb.init(
     config={
         "param": "v_1",
         "reward_function": "v_1",
-        "buffer_size": 4,
-        "batch_size": 2,
-        "type_buffer": "partly_minus_butch_size"
+        "buffer_size": 2000,
+        "batch_size": 32,
+        "type_buffer": "partly_minus_butch_size",
+        "description": ""
     },
 )
 
-# solver_device('cuda')
-solver_device('cpu')
+solver_device('cuda')
+# solver_device('cpu')
 # torch.set_default_device("cpu")
 # torch.set_default_device('mps:0')
 
@@ -157,9 +158,9 @@ def wave_1d_basic_experiment(grid_res):
 
     cb_es = early_stopping.EarlyStopping(eps=1e-6,
                                          loss_window=100,
-                                         no_improvement_patience=1000,
-                                         patience=100,
-                                         randomize_parameter=1e-4,
+                                         no_improvement_patience=100,
+                                         patience=20,
+                                         randomize_parameter=1e-2,
                                          info_string_every=10)
 
     cb_plots = plot.Plots(save_every=None,
@@ -239,11 +240,11 @@ def wave_1d_basic_experiment(grid_res):
     optimizer = {
         'Adam':{
             'lr':[1e-2, 1e-3, 1e-4],
-            'epochs':[100, 1000, 2500]
+            'epochs':[100, 1000]
         },
         'LBFGS':{
             'lr':[1, 5e-1, 1e-1],
-            "history_size": [10, 50, 100],
+            "history_size": [50, 100],
             'epochs':[100, 500]
         },
         'PSO':{
@@ -281,7 +282,7 @@ def wave_1d_basic_experiment(grid_res):
         "polars_weight": 0.0,
         "wellspacedtrajectory_weight": 0.0,
         "gridscaling_weight": 0.0,
-        "device": "cpu"
+        "device": "cuda"
     }
 
     AE_train_params = {
@@ -335,9 +336,9 @@ def wave_1d_basic_experiment(grid_res):
         "n_trajectories": 1000,
         "tolerance": 1e-1,
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
-        "min_loss_change": 1e-4,
+        "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
-        "rl_buffer_size": 4,
+        "rl_buffer_size": 2000,
         "rl_batch_size": 32,
         "rl_reward_method": "absolute",
         "exact_solution_func": exact_func,

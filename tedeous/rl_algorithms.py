@@ -47,9 +47,9 @@ class DQN_optim(nn.Module):
         self.relu2 = nn.ReLU()
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        self.fc1 = nn.Linear(6 * 6 * 32, 256)  # n_observation instead 6 * 6
+        self.fc1 = nn.Linear(6 * 6 * 32, 512)  # n_observation instead 6 * 6
         self.relu3 = nn.ReLU()
-        self.fc_optim_class = nn.Linear(256, optim_n)
+        self.fc_optim_class = nn.Linear(512, optim_n)
 
         self.softmax = nn.Softmax()
 
@@ -66,7 +66,7 @@ class DQN_params(nn.Module):
         super(DQN_params, self).__init__()
         self.optimizer_dict = optimizer_dict
         layers_ar = []
-        self.fc_liner = lambda param_var: nn.Linear(256, len(param_var))
+        self.fc_liner = lambda param_var: nn.Linear(512, len(param_var))
         self.fc_param_by_opt = defaultdict(defaultdict)
         for opt_name in self.optimizer_dict.keys():
             for param_name in self.optimizer_dict[opt_name].keys():

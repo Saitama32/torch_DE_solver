@@ -20,6 +20,18 @@ from tedeous.device import device_type
 
 from tedeous.rl_algorithms import DQNAgent
 from tedeous.rl_environment import EnvRLOptimizer
+import json
+
+def convert_tensors(obj):
+    """Рекурсивное преобразование тензоров в списки."""
+    if isinstance(obj, torch.Tensor):
+        return obj.detach().cpu().numpy().tolist()
+    elif isinstance(obj, dict):
+        return {k: convert_tensors(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_tensors(v) for v in obj]
+    else:
+        return obj
 
 
 def get_state_shape(loss_surface_params):
@@ -231,8 +243,8 @@ class Model():
                 callbacks.on_epoch_begin()
                 self.optimizer.zero_grad()
 
-                if rl_agent_params:
-                    callbacks.callbacks[0]._stop_dings = 0
+                # if rl_agent_params:
+                #     callbacks.callbacks[0]._stop_dings = 0
 
                 # this fellow should be in NNCG closure, but since it calls closure many times,
                 # it updates several time, which casuses instability
@@ -297,18 +309,24 @@ class Model():
                 loss_history = loss_history[-stuck_threshold:]
                 delta_loss = max(loss_history) - min(loss_history)
 
-                if optimizer.optimizer in ('PSO', 'CSO'):
-                    grad_norm = torch.norm(torch.mean(self.optimizer.grads_swarm, dim=0)).item()
-                    # grad_norm = torch.norm(self.optimizer.gradient(self.cur_loss)).item()  # здесь ошибка
-                else:
-                    grad_norm = 0.
-                    for param in self.net.parameters():
-                        if param.grad is not None:
-                            grad_norm += param.grad.norm().item()
+                # if optimizer.optimizer in ('PSO', 'CSO'):
+                #     grad_norm = torch.norm(torch.mean(self.optimizer.grads_swarm, dim=0)).item()
+                #     # grad_norm = torch.norm(self.optimizer.gradient(self.cur_loss)).item()  # здесь ошибка
+                # else:
+                #     grad_norm = 0.
+                #     for param in self.net.parameters():
+                #         if param.grad is not None:
+                #             grad_norm += param.grad.norm().item()
 
-                if delta_loss < min_loss_change or grad_norm < min_grad_norm:
-                    print(f"\nLocal min!!!\nDelta loss: {delta_loss}, grad norm: {grad_norm}")
+                # if delta_loss < min_loss_change or grad_norm < min_grad_norm:
+                #     print(f"\nLocal min!!!\nDelta loss: {delta_loss}, grad norm: {grad_norm}")
+                #     self.rl_penalty = -1
+
+                if self.stop_training:
+                    print(f"\nLocal min!!!")
                     self.rl_penalty = -1
+                    callbacks.callbacks[0]._stop_dings = 0
+                    self.stop_training = False
 
                 if loss_history[-1] == np.nan:
                     self.rl_penalty = -1
@@ -357,14 +375,13 @@ class Model():
             variable_dict = self.domain.variable_dict
             bconds = self.conditions.build(variable_dict)
 
+            # tupe_dqn_class = get_tup_actions(optimizers)
             # make_legend(tupe_dqn_class, optimizers)
 
             while rl_agent_params['n_trajectories'] - idx_traj > 0:
                 self.net = self.solution_cls.model
-                for m in self.net.modules():
-                    if isinstance(m, torch.nn.Linear):
-                        torch.nn.init.xavier_normal_(m.weight)
-                        torch.nn.init.zeros_(m.bias)
+                self.net.apply(self.reinit_weights)
+                self.solution_cls._model_change(self.net)
                 self.t = 1
 
                 # state = torch init -> AE_model
@@ -474,6 +491,17 @@ class Model():
                     rl_agent.push_memory((state, next_state, action_raw, reward, abs(done)))
                     # for _ in range(32):
                     #     rl_agent.push_memory((state, next_state, dqn_class, reward))
+                    try:
+                        with open(r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\Burgers\transition\transitions_{}.jsonl'.format(rl_agent.steps_done), 'w') as f:
+                            entry = {
+                                'state': convert_tensors(state),
+                                'next_state': convert_tensors(next_state),
+                                'action': convert_tensors(action_raw),
+                                'reward': float(reward)
+                            }
+                            f.write(json.dumps(entry) + '\n')
+                    except Exception as e:
+                        print(e)
 
                     if rl_agent.replay_buffer.__len__() % rl_agent_params["rl_batch_size"] == 0:
                         rl_agent.optim_()
