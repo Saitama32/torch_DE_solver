@@ -72,6 +72,7 @@ class EarlyStopping(Callback):
                 self._stop_dings += 1
                 if self.mode in ('NN', 'autograd'):
                     self.model.net.apply(self._r)
+                    self.model.solution_cls._model_change(self.model.net)
                 self._check = 'window_check'
 
     def _patience_check(self):
@@ -87,6 +88,7 @@ class EarlyStopping(Callback):
                 if self.save_best:
                     self.model.net=self.best_model
                 self.model.net.apply(self._r)
+                self.model.solution_cls._model_change(self.model.net)
             self._check = 'patience_check'
 
     def _absloss_check(self):

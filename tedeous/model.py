@@ -23,8 +23,8 @@ from tedeous.rl_environment import EnvRLOptimizer
 import json
 import os
 
-output_dir = './transitions'
-os.makedirs(output_dir, exist_ok=True) 
+output_dir = os.path.join('.', 'transitions')
+os.makedirs(output_dir, exist_ok=True)
 
 
 def convert_tensors(obj):
@@ -384,12 +384,14 @@ class Model():
             # make_legend(tupe_dqn_class, optimizers)
 
             while rl_agent_params['n_trajectories'] - idx_traj > 0:
-                self.net = self.solution_cls.model
                 self.net.apply(self.reinit_weights)
+                self.net = self.solution_cls.model
                 self.solution_cls._model_change(self.net)
                 self.t = 1
+                
 
                 # state = torch init -> AE_model
+                callbacks.callbacks[0]._stop_dings = 0
                 total_reward = 0
                 optimizers_history = []
                 state = {"loss_total": torch.zeros(state_shape),
@@ -458,10 +460,14 @@ class Model():
                         torch.mean((rl_agent_params["exact_solution_func"](grid).reshape(-1, 1) - net(grid)) ** 2)
                     )
 
-                    boundary_rmse = torch.sum(torch.tensor([
+                    boundary_rmse = torch.sum(torch.stack([
                         torch.sqrt(torch.mean(
-                            bconds[i]["bval"].reshape(-1, 1) - net(bconds[i]["bnd"]), dtype=torch.float32) ** 2)
-                        for i in range(len(bconds))]))
+                            (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
+                        ))
+                        for b in bconds
+                    ]))
+                    
+                    print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
 
                     env.solver_models = solver_models
                     env.reward_params = {
@@ -483,7 +489,7 @@ class Model():
                     next_state, reward, done, _ = env.step()
 
                     if done == 1:
-                        reward += 100
+                        reward += torch.tensor(100, dtype=torch.int8)
                     elif done == 0:
                         reward -= 0.01 * i
                     elif done == -1:
@@ -497,7 +503,8 @@ class Model():
                     # for _ in range(32):
                     #     rl_agent.push_memory((state, next_state, dqn_class, reward))
                     try:
-                        with open(path + '\transitions_{}.jsonl'.format(rl_agent.steps_done), 'w') as f:
+                        file_path = os.path.join(output_dir, 'transitions_{}.jsonl'.format(rl_agent.steps_done))
+                        with open(file_path, 'w') as f:
                             entry = {
                                 'state': convert_tensors(state),
                                 'next_state': convert_tensors(next_state),

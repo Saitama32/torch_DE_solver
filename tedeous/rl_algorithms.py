@@ -10,6 +10,8 @@ from copy import copy
 import wandb
 import matplotlib.pyplot as plt
 from collections import defaultdict
+import io
+import tempfile
 
 
 GAMMA = 0.99
@@ -47,9 +49,9 @@ class DQN_optim(nn.Module):
         self.relu2 = nn.ReLU()
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        self.fc1 = nn.Linear(6 * 6 * 32, 512)  # n_observation instead 6 * 6
+        self.fc1 = nn.Linear(6 * 6 * 32, 256)  # n_observation instead 6 * 6
         self.relu3 = nn.ReLU()
-        self.fc_optim_class = nn.Linear(512, optim_n)
+        self.fc_optim_class = nn.Linear(256, optim_n)
 
         self.softmax = nn.Softmax()
 
@@ -66,7 +68,7 @@ class DQN_params(nn.Module):
         super(DQN_params, self).__init__()
         self.optimizer_dict = optimizer_dict
         layers_ar = []
-        self.fc_liner = lambda param_var: nn.Linear(512, len(param_var))
+        self.fc_liner = lambda param_var: nn.Linear(256, len(param_var))
         self.fc_param_by_opt = defaultdict(defaultdict)
         for opt_name in self.optimizer_dict.keys():
             for param_name in self.optimizer_dict[opt_name].keys():
@@ -304,6 +306,19 @@ class DQNAgent:
 
         # self.replay_buffer.memory = deque(filter(lambda x: x not in set(buff_test), self.replay_buffer.memory),
         #                                   maxlen=self.replay_buffer.memory.maxlen)
+        # Временный файл для model_optim
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp_optim:
+            torch.save(self.model_optim.state_dict(), tmp_optim.name)
+            optim_path = tmp_optim.name
+
+        # Временный файл для model_params
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp_params:
+            torch.save(self.model_params.state_dict(), tmp_params.name)
+            params_path = tmp_params.name
+        artifact = wandb.Artifact(f"model_step_{self.steps_done}", type="model")
+        artifact.add_file(optim_path, name=f"model_optim_step_{self.steps_done}.pt")
+        artifact.add_file(params_path, name=f"model_params_step_{self.steps_done}.pt")
+        wandb.log_artifact(artifact)
 
         self.opt_count += 1
         self.opt_count_out += 1
