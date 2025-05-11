@@ -21,6 +21,11 @@ from tedeous.device import device_type
 from tedeous.rl_algorithms import DQNAgent
 from tedeous.rl_environment import EnvRLOptimizer
 import json
+import os
+
+output_dir = './transitions'
+os.makedirs(output_dir, exist_ok=True) 
+
 
 def convert_tensors(obj):
     """Рекурсивное преобразование тензоров в списки."""
@@ -492,7 +497,7 @@ class Model():
                     # for _ in range(32):
                     #     rl_agent.push_memory((state, next_state, dqn_class, reward))
                     try:
-                        with open(r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\Burgers\transition\transitions_{}.jsonl'.format(rl_agent.steps_done), 'w') as f:
+                        with open(path + '\transitions_{}.jsonl'.format(rl_agent.steps_done), 'w') as f:
                             entry = {
                                 'state': convert_tensors(state),
                                 'next_state': convert_tensors(next_state),
