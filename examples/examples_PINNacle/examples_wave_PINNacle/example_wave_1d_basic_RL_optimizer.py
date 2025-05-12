@@ -339,7 +339,7 @@ def wave_1d_basic_experiment(grid_res):
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
         "rl_buffer_size": 2000,
-        "rl_batch_size": 32,
+        "rl_batch_size": 16,
         "rl_reward_method": "absolute",
         "exact_solution_func": exact_func,
         "reward_operator_coeff": 1,
