@@ -20,10 +20,30 @@ from tedeous.callbacks import early_stopping, plot, cache
 from tedeous.optimizers.optimizer import Optimizer
 from tedeous.device import solver_device
 from tedeous.utils import exact_solution_data
+import wandb
 
-solver_device('gpu')
+wandb.login(key='ae56768e03b6f06ca029c7b1e40fd300c2769a6d')
 
-datapath = r"C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\examples\PINNacle_data\burgers1d.npy"
+run = wandb.init(
+    # Set the wandb entity where your project will be logged (generally your team name).
+    # Set the wandb project where this run will be logged.
+    project="rlpinn",
+    # Track hyperparameters and run metadata.
+    config={
+        "param": "v_1",
+        "reward_function": "v_1",
+        "buffer_size": 2000,
+        "batch_size": 32,
+        "type_buffer": "absolute",
+        "description": ""
+    },
+)
+
+solver_device('cuda')
+
+base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+print(base_dir)
+datapath = os.path.join(base_dir, 'PINNacle_data', 'burgers1d.npy')
 
 mu = 0.01 / np.pi
 
