@@ -287,6 +287,9 @@ class Model():
                     # loss = self.cur_loss.item() if isinstance(self.cur_loss, torch.Tensor) else self.cur_loss
                     # loss_history.append(loss)
                     print(f'[{datetime.datetime.now()}] Step = {self.t}, loss = {loss:.6f}.')
+                if loss == np.nan:
+                    self.rl_penalty = -1
+                    break
             else:
                 loss = self.cur_loss.item() if isinstance(self.cur_loss, torch.Tensor) else self.cur_loss
                 loss_history.append(loss)
