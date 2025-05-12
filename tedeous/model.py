@@ -14,16 +14,16 @@ from tedeous.input_preprocessing import Operator_bcond_preproc
 from tedeous.callbacks.callback_list import CallbackList
 from tedeous.solution import Solution
 from tedeous.optimizers.optimizer import Optimizer
-from tedeous.utils import save_model_nn, save_model_mat
+from tedeous.utils import save_model_nn, save_model_mat, exact_solution_data
 from tedeous.optimizers.closure import Closure
 from tedeous.device import device_type
 
 from tedeous.rl_algorithms import DQNAgent
 from tedeous.rl_environment import EnvRLOptimizer
-import json
 import os
+import wandb
 
-output_dir = os.path.join('.', 'transitions')
+output_dir = os.path.join('.', 'transitions_test')
 os.makedirs(output_dir, exist_ok=True)
 
 
@@ -456,9 +456,16 @@ class Model():
 
                     net = self.net.to(device_type())
 
-                    operator_rmse = torch.sqrt(
-                        torch.mean((rl_agent_params["exact_solution_func"](grid).reshape(-1, 1) - net(grid)) ** 2)
-                    )
+                    if callable(rl_agent_params["exact_solution"]):
+                        operator_rmse = torch.sqrt(
+                            torch.mean((rl_agent_params["exact_solution"](grid).reshape(-1, 1) - net(grid)) ** 2)
+                        )
+                    else:
+                        exact = exact_solution_data(grid, rl_agent_params["exact_solution"],
+                                                    equation_params[-1][0], equation_params[-1][-1],
+                                                    t_dim_flag='t' in list(self.domain.variable_dict.keys()))
+                        net_predicted = net(grid)
+                        operator_rmse = torch.sqrt(torch.mean((exact.reshape(-1, 1) - net_predicted) ** 2))
 
                     boundary_rmse = torch.sum(torch.stack([
                         torch.sqrt(torch.mean(
@@ -503,15 +510,22 @@ class Model():
                     # for _ in range(32):
                     #     rl_agent.push_memory((state, next_state, dqn_class, reward))
                     try:
-                        file_path = os.path.join(output_dir, 'transitions_{}.jsonl'.format(rl_agent.steps_done))
-                        with open(file_path, 'w') as f:
-                            entry = {
-                                'state': convert_tensors(state),
-                                'next_state': convert_tensors(next_state),
-                                'action': convert_tensors(action_raw),
-                                'reward': float(reward)
-                            }
-                            f.write(json.dumps(entry) + '\n')
+                        # Сохраняем entry локально
+                        file_path = os.path.join(output_dir, f'transitions_{rl_agent.steps_done}.pt')
+                        entry = {
+                            'state': state,
+                            'next_state': next_state,
+                            'action': action_raw,
+                            'reward': float(reward),
+                            'done': abs(done)
+                        }
+                        torch.save(entry, file_path)
+
+                        # Логируем тот же файл в W&B
+                        artifact = wandb.Artifact(f"transitions_step_{rl_agent.steps_done}", type="transition")
+                        artifact.add_file(file_path, name=f"entry_step_{rl_agent.steps_done}.pt")
+                        wandb.log_artifact(artifact)
+
                     except Exception as e:
                         print(e)
 
