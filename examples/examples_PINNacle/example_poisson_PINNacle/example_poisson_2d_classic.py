@@ -12,9 +12,30 @@ from tedeous.callbacks import adaptive_lambda, cache, early_stopping, plot
 from tedeous.optimizers.optimizer import Optimizer
 from tedeous.device import solver_device
 from tedeous.utils import exact_solution_data
+import wandb
+
+wandb.login(key='ae56768e03b6f06ca029c7b1e40fd300c2769a6d')
+
+run = wandb.init(
+    # Set the wandb entity where your project will be logged (generally your team name).
+    # Set the wandb project where this run will be logged.
+    project="rlpinn",
+    # Track hyperparameters and run metadata.
+    config={
+        "param": "v_1",
+        "reward_function": "v_1",
+        "buffer_size": 2000,
+        "batch_size": 32,
+        "type_buffer": "absolute",
+        "description": ""
+    },
+)
 
 solver_device('cuda')
-datapath = "../../PINNacle_data/poisson1_cg_data.npy"
+# datapath = "../../PINNacle_data/poisson1_cg_data.npy"
+base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+print(base_dir)
+datapath = os.path.join(base_dir, 'PINNacle_data', 'poisson1_cg_data.npy')
 
 
 def poisson_2d_classic_experiment(grid_res):
@@ -34,21 +55,6 @@ def poisson_2d_classic_experiment(grid_res):
 
     # Circle type of removed domains ###################################################################################
 
-    removed_domains_lst = [
-        {'circle': {'center': (0.3, 0.3), 'radius': 0.1}},
-        {'circle': {'center': (-0.3, 0.3), 'radius': 0.1}},
-        {'circle': {'center': (0.3, -0.3), 'radius': 0.1}},
-        {'circle': {'center': (-0.3, -0.3), 'radius': 0.1}}
-    ]
-
-    # Boundary conditions ##############################################################################################
-
-    # CSG boundaries
-
-    boundaries.dirichlet({'circle': {'center': (0.3, 0.3), 'radius': 0.1}}, value=0)
-    boundaries.dirichlet({'circle': {'center': (-0.3, 0.3), 'radius': 0.1}}, value=0)
-    boundaries.dirichlet({'circle': {'center': (0.3, -0.3), 'radius': 0.1}}, value=0)
-    boundaries.dirichlet({'circle': {'center': (-0.3, -0.3), 'radius': 0.1}}, value=0)
 
     # Non CSG boundaries
 
@@ -95,7 +101,7 @@ def poisson_2d_classic_experiment(grid_res):
         torch.nn.Tanh(),
         torch.nn.Linear(neurons, pde_dim_out)
     )
-
+    model_layers = [pde_dim_in, neurons, neurons, neurons, neurons, neurons, pde_dim_out]
     for m in net.modules():
         if isinstance(m, torch.nn.Linear):
             torch.nn.init.xavier_normal_(m.weight)
@@ -104,8 +110,12 @@ def poisson_2d_classic_experiment(grid_res):
     start = time.time()
 
     model = Model(net, domain, equation, boundaries)
+    grid_test = torch.cartesian_prod(torch.linspace(0, 1, 100), torch.linspace(0, 1, 100))
 
-    model.compile('autograd', lambda_operator=1, lambda_bound=100, removed_domains=removed_domains_lst)
+    model.compile('autograd', lambda_operator=1, lambda_bound=10)
+    u_exact_test = exact_solution_data(grid_test, datapath, pde_dim_in, pde_dim_out, t_dim_flag=True).reshape(-1, 1)
+    equation_params = [u_exact_test, grid_test, grid_res, domain, equation, boundaries, model_layers]
+    
 
     img_dir = os.path.join(os.path.dirname(__file__), 'poisson_2d_classic_img')
 
@@ -113,20 +123,138 @@ def poisson_2d_classic_experiment(grid_res):
 
     cb_es = early_stopping.EarlyStopping(eps=1e-9,
                                          loss_window=100,
-                                         no_improvement_patience=1000,
-                                         patience=5,
-                                         info_string_every=10,
-                                         randomize_parameter=1e-5)
+                                         no_improvement_patience=100,
+                                         patience=20,
+                                         randomize_parameter=1e-2,
+                                         info_string_every=10)
 
     cb_plots = plot.Plots(save_every=100,
                           print_every=None,
                           img_dir=img_dir,
                           img_dim='3d',
                           scatter_flag=True)
+    
+    optimizer = {
+        'Adam':{
+            'lr':[1e-2, 1e-3, 1e-4],
+            'epochs':[500, 1000]
+        },
+        'LBFGS':{
+            'lr':[1, 5e-1, 1e-1],
+            "history_size": [50, 100],
+            'epochs':[100, 500]
+        },
+        'PSO':{
+            'lr':[5e-3, 5e-4, 5e-5],
+            'epochs':[100,500]
+        },
+        # 'NNCG':{
+        #     # 'lr':[1, 5e-1, 1e-1, 5e-2, 1e-2],
+        #     'lr':[1, 5e-1],
+        #     'epochs':[50, 51, 52],
+        #     'precond_update_frequency':[10, 15, 20]
+        # }
+    }
+    AE_model_params = {
+        "mode": "NN",
+        "num_of_layers": 3,
+        "layers_AE": [
+            991,
+            125,
+            15
+        ],
+        "num_models": None,
+        "from_last": False,
+        "prefix": "model-",
+        "every_nth": 1,
+        "grid_step": 0.1,
+        "d_max_latent": 2,
+        "anchor_mode": "circle",
+        "rec_weight": 10000.0,
+        "anchor_weight": 0.0,
+        "lastzero_weight": 0.0,
+        "polars_weight": 0.0,
+        "wellspacedtrajectory_weight": 0.0,
+        "gridscaling_weight": 0.0,
+        "device": "cuda"
+    }
 
-    optimizer = Optimizer('Adam', {'lr': 1e-3})
+    AE_train_params = {
+        "first_RL_epoch_AE_params": {
+            "epochs": 10000,
+            "patience_scheduler": 4000,
+            "cosine_scheduler_patience": 1200,
+        },
+        "other_RL_epoch_AE_params": {
+            "epochs": 20000,
+            "patience_scheduler": 4000,
+            "cosine_scheduler_patience": 1200,
+        },
+        "batch_size": 32,
+        "every_epoch": 100,
+        "learning_rate": 5e-4,
+        "resume": True,
+        "finetune_AE_model": False
+    }
 
-    model.train(optimizer, 5e1, save_model=True, callbacks=[cb_cache, cb_es, cb_plots])
+    loss_surface_params = {
+        "loss_types": ["loss_total", "loss_oper", "loss_bnd"],
+        "every_nth": 1,
+        "num_of_layers": 3,
+        "layers_AE": [
+            991,
+            125,
+            15
+        ],
+        "batch_size": 32,
+        "num_models": None,
+        "from_last": False,
+        "prefix": "model-",
+        "loss_name": "loss_total",
+        "x_range": [-1.25, 1.25, 25],
+        "vmax": -1.0,
+        "vmin": -1.0,
+        "vlevel": 30.0,
+        "key_models": None,
+        "key_modelnames": None,
+        "density_type": "CKA",
+        "density_p": 2,
+        "density_vmax": -1,
+        "density_vmin": -1,
+        "colorFromGridOnly": True,
+        "img_dir": img_dir
+    }
+
+    rl_agent_params = {
+        "n_save_models": 10,
+        "n_trajectories": 1000,
+        "tolerance": 0.5,
+        "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
+        "min_loss_change": 1e-7,
+        "min_grad_norm": 1e-5,
+        "rl_buffer_size": 2000,
+        "rl_batch_size": 16,
+        "rl_reward_method": "absolute",
+        "exact_solution": datapath,
+        "reward_operator_coeff": 1,
+        "reward_boundary_coeff": 1
+    }
+
+
+    model.train(optimizer,
+                5e5,
+                save_model=True,
+                callbacks=[cb_es, cb_plots, cb_cache],
+                rl_agent_params=rl_agent_params,
+                models_concat_flag=False,
+                model_name='rl_optimization_agent',
+                equation_params=equation_params,
+                AE_model_params=AE_model_params,
+                AE_train_params=AE_train_params,
+                loss_surface_params=loss_surface_params)
+    # optimizer = Optimizer('Adam', {'lr': 1e-3})
+
+    # model.train(optimizer, 5e1, save_model=True, callbacks=[cb_cache, cb_es, cb_plots])
 
     end = time.time()
 
