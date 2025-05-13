@@ -262,7 +262,7 @@ class Model():
                 
                 loss = self.cur_loss.item() if isinstance(self.cur_loss, torch.Tensor) else self.cur_loss
 
-                if np.isnan(loss):
+                if np.isnan(loss) or loss == np.inf or loss > 1000:
                     print(f'[{datetime.datetime.now()}] Step = {self.t}, loss is nan. Breaking early.')
                     self.rl_penalty = -1
                     break
