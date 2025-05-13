@@ -259,18 +259,19 @@ class Model():
                         self.optimizer.step(closure)
                     if optimizer.gamma is not None and self.t % optimizer.decay_every == 0:
                         optimizer.sheduler.step()
-
-                if rl_agent_params:
-                    current_model = copy.deepcopy(self.net)
-                    self.saved_models.append(current_model)
-                    # self.prev_to_current_optimizer_models.append(current_model)
-
+                
                 loss = self.cur_loss.item() if isinstance(self.cur_loss, torch.Tensor) else self.cur_loss
 
                 if np.isnan(loss):
                     print(f'[{datetime.datetime.now()}] Step = {self.t}, loss is nan. Breaking early.')
                     self.rl_penalty = -1
                     break
+                if rl_agent_params:
+                    current_model = copy.deepcopy(self.net)
+                    self.saved_models.append(current_model)
+                    # self.prev_to_current_optimizer_models.append(current_model)
+
+                
                 loss_history.append(loss)
 
                 callbacks.on_epoch_end()
