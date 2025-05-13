@@ -27,18 +27,6 @@ output_dir = os.path.join('.', 'transitions_test')
 os.makedirs(output_dir, exist_ok=True)
 
 
-def convert_tensors(obj):
-    """Рекурсивное преобразование тензоров в списки."""
-    if isinstance(obj, torch.Tensor):
-        return obj.detach().cpu().numpy().tolist()
-    elif isinstance(obj, dict):
-        return {k: convert_tensors(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_tensors(v) for v in obj]
-    else:
-        return obj
-
-
 def get_state_shape(loss_surface_params):
     min_x, max_x, xnum = loss_surface_params["x_range"]
     min_y, max_y = min_x, max_x
@@ -278,6 +266,11 @@ class Model():
                     # self.prev_to_current_optimizer_models.append(current_model)
 
                 loss = self.cur_loss.item() if isinstance(self.cur_loss, torch.Tensor) else self.cur_loss
+
+                if np.isnan(loss):
+                    print(f'[{datetime.datetime.now()}] Step = {self.t}, loss is nan. Breaking early.')
+                    self.rl_penalty = -1
+                    break
                 loss_history.append(loss)
 
                 callbacks.on_epoch_end()
@@ -287,9 +280,6 @@ class Model():
                     # loss = self.cur_loss.item() if isinstance(self.cur_loss, torch.Tensor) else self.cur_loss
                     # loss_history.append(loss)
                     print(f'[{datetime.datetime.now()}] Step = {self.t}, loss = {loss:.6f}.')
-                if loss == np.nan:
-                    self.rl_penalty = -1
-                    break
             else:
                 loss = self.cur_loss.item() if isinstance(self.cur_loss, torch.Tensor) else self.cur_loss
                 loss_history.append(loss)

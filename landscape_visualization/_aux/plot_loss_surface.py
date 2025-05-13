@@ -16,7 +16,7 @@ from landscape_visualization._aux.trajectories_data import get_trajectory_datalo
 from landscape_visualization._aux.utils import get_density, get_files, repopulate_model
 from landscape_visualization._aux.PINN_loss_data import PINNLossData, get_PINN
 
-import tedeous.model as model
+
 from tedeous.data import Domain, Conditions, Equation
 
 
@@ -184,6 +184,7 @@ class PlotLossSurface:
 
     def compute_losses(self, models, domain, equation, boundaries, PINN_layers):
         """Get losses for list of models"""
+        import tedeous.model as model
         losses_dict = {}
         for loss_type in self.loss_types:
             losses_dict[loss_type] = []

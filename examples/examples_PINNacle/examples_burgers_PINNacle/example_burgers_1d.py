@@ -151,11 +151,11 @@ def burgers_1d_experiment(grid_res):
     optimizer = {
         'Adam':{
             'lr':[1e-2, 1e-3, 1e-4],
-            'epochs':[100, 500, 1000]
+            'epochs':[500, 1000]
         },
         'LBFGS':{
-            'lr':[1, 5e-1, 1e-1, 5e-2, 1e-2],
-            "history_size": [10, 50, 100],
+            'lr':[1, 5e-1, 1e-1],
+            "history_size": [50, 100],
             'epochs':[100, 500]
         },
         'PSO':{
