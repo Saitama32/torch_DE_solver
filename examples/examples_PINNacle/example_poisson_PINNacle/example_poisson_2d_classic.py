@@ -112,7 +112,7 @@ def poisson_2d_classic_experiment(grid_res):
     model = Model(net, domain, equation, boundaries)
     grid_test = torch.cartesian_prod(torch.linspace(0, 1, 100), torch.linspace(0, 1, 100))
 
-    model.compile('autograd', lambda_operator=1, lambda_bound=10)
+    model.compile('autograd', lambda_operator=2, lambda_bound=1)
     u_exact_test = exact_solution_data(grid_test, datapath, pde_dim_in, pde_dim_out, t_dim_flag=True).reshape(-1, 1)
     equation_params = [u_exact_test, grid_test, grid_res, domain, equation, boundaries, model_layers]
     
