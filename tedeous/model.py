@@ -266,12 +266,12 @@ class Model():
                     print(f'[{datetime.datetime.now()}] Step = {self.t}, loss is nan. Breaking early.')
                     self.rl_penalty = -1
                     break
+
                 if rl_agent_params:
                     current_model = copy.deepcopy(self.net)
                     self.saved_models.append(current_model)
                     # self.prev_to_current_optimizer_models.append(current_model)
 
-                
                 loss_history.append(loss)
 
                 callbacks.on_epoch_end()

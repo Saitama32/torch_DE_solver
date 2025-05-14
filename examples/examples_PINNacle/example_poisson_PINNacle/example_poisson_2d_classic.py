@@ -228,7 +228,7 @@ def poisson_2d_classic_experiment(grid_res):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 0.5,
+        "tolerance": 0.6,
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
@@ -244,7 +244,7 @@ def poisson_2d_classic_experiment(grid_res):
     model.train(optimizer,
                 5e5,
                 save_model=True,
-                callbacks=[cb_es, cb_plots, cb_cache],
+                callbacks=[cb_es, cb_plots],
                 rl_agent_params=rl_agent_params,
                 models_concat_flag=False,
                 model_name='rl_optimization_agent',
