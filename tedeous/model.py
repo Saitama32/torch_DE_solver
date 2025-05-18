@@ -241,6 +241,7 @@ class Model():
 
                 # this fellow should be in NNCG closure, but since it calls closure many times,
                 # it updates several time, which casuses instability
+                prev_model = copy.deepcopy(self.net)
 
                 if optimizer.optimizer == 'NNCG' and \
                         ((self.t - 1) % optimizer.params['precond_update_frequency'] == 0) and not reuse_nncg_flag:
@@ -265,6 +266,8 @@ class Model():
                 if np.isnan(loss) or loss == np.inf or loss > 1000:
                     print(f'[{datetime.datetime.now()}] Step = {self.t}, loss is nan. Breaking early.')
                     self.rl_penalty = -1
+                    self.net = prev_model
+                    self.solution_cls._model_change(self.net)
                     break
 
                 if rl_agent_params:

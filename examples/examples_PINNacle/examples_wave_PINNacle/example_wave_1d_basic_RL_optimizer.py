@@ -40,6 +40,11 @@ run = wandb.init(
     },
 )
 
+
+base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+print(base_dir)
+datapath = os.path.join(base_dir, 'PINNacle_data', 'wave_darcy.npy')
+
 solver_device('cuda')
 # solver_device('cpu')
 # torch.set_default_device("cpu")
@@ -341,7 +346,7 @@ def wave_1d_basic_experiment(grid_res):
         "rl_buffer_size": 2000,
         "rl_batch_size": 16,
         "rl_reward_method": "absolute",
-        "exact_solution_func": exact_func,
+        "exact_solution": exact_func,
         "reward_operator_coeff": 1,
         "reward_boundary_coeff": 1
     }
