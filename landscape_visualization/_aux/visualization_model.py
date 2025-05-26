@@ -36,6 +36,7 @@ class VisualizationModel:
                  prefix: str = 'model-',
                  every_nth: int = 1,
                  grid_step: float = 0.1,
+                 latent_dim: int = 2,
                  d_max_latent: float = 2.0,
                  anchor_mode: str = "circle",
                  rec_weight: float = 1.0,
@@ -75,7 +76,7 @@ class VisualizationModel:
         self.layers_AE = layers_AE
         self.AE_model = None
         self.path_to_plot_model = path_to_plot_model
-        self.latent_dim = 2
+        self.latent_dim = latent_dim
         self.rec_weight = rec_weight
 
         # Data-related arguments

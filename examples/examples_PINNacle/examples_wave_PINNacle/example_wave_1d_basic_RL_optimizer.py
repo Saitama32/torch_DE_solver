@@ -23,21 +23,21 @@ from tedeous.device import solver_device
 from tedeous.models import mat_model
 import wandb
 
-wandb.login()
+# wandb.login()
 
-run = wandb.init(
-    # Set the wandb entity where your project will be logged (generally your team name).
-    # Set the wandb project where this run will be logged.
-    project="rlpinn",
-    # Track hyperparameters and run metadata.
-    config={
-        "param": "v_1",
-        "reward_function": "v_1",
-        "buffer_size": 4,
-        "batch_size": 2,
-        "type_buffer": "partly_minus_butch_size"
-    },
-)
+# run = wandb.init(
+#     # Set the wandb entity where your project will be logged (generally your team name).
+#     # Set the wandb project where this run will be logged.
+#     project="rlpinn",
+#     # Track hyperparameters and run metadata.
+#     config={
+#         "param": "v_1",
+#         "reward_function": "v_1",
+#         "buffer_size": 4,
+#         "batch_size": 2,
+#         "type_buffer": "partly_minus_butch_size"
+#     },
+# )
 
 # solver_device('cuda')
 solver_device('cpu')
@@ -274,6 +274,7 @@ def wave_1d_basic_experiment(grid_res):
         "every_nth": 1,
         "grid_step": 0.1,
         "d_max_latent": 2,
+        "latent_dim": 1,
         "anchor_mode": "circle",
         "rec_weight": 10000.0,
         "anchor_weight": 0.0,
@@ -314,6 +315,7 @@ def wave_1d_basic_experiment(grid_res):
         "batch_size": 32,
         "num_models": None,
         "from_last": False,
+        "latent_dim": 1,
         "prefix": "model-",
         "loss_name": "loss_total",
         "x_range": [-1.25, 1.25, 25],
@@ -338,7 +340,7 @@ def wave_1d_basic_experiment(grid_res):
         "min_loss_change": 1e-4,
         "min_grad_norm": 1e-5,
         "rl_buffer_size": 4,
-        "rl_batch_size": 32,
+        "rl_batch_size": 2,
         "rl_reward_method": "absolute",
         "exact_solution": exact_func,
         "reward_operator_coeff": 1,

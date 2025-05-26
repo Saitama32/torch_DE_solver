@@ -33,6 +33,7 @@ class PlotLossSurface:
                  prefix: str = "model-",
                  num_models: int = None,
                  from_last: bool = True,
+                 latent_dim: int = 2,
                  vlevel: int = 20,
                  vmin: float = -1,
                  vmax: float = 1,
@@ -106,7 +107,7 @@ class PlotLossSurface:
         self.density_vmin = density_vmin
         self.colorFromGridOnly = colorFromGridOnly
         self.loss_types = loss_types
-        self.latent_dim = 2
+        self.latent_dim = latent_dim
         self.img_dir = img_dir
         self.states_dict = {}
         self.counter = 1
@@ -276,25 +277,37 @@ class PlotLossSurface:
         # scan the unit plane from 0-1 for 2D.
         # For each step, evalute the coordinate through the decoder and get the parameters and then get the loss.
 
-        self.min_x, self.max_x, self.xnum = self.x_range
+       # Create coordinate axes for each dimension
+        if isinstance(self.x_range[0], list):
+            # Assume format like [[-1.2, 1.2, 25], [-1.2, 1.2, 25], ...]
+            axis_ranges = self.x_range
+        else:
+            # Legacy format: [-1.2, 1.2, 25] for 2D only
+            axis_ranges = [self.x_range] * self.latent_dim
 
-        min_x, max_x = self.min_x, self.max_x
-        min_y, max_y = self.min_x, self.max_x
+        step_sizes = [(r[1] - r[0]) / r[2] for r in axis_ranges]
+        axes = [torch.arange(r[0], r[1] + s, s) for r, s in zip(axis_ranges, step_sizes)]
 
-        x_coords = torch.arange(min_x, max_x + self.step_size, self.step_size)
-        y_coords = torch.arange(min_y, max_y + self.step_size, self.step_size)
-
-        grid_xx, grid_yy = torch.meshgrid(x_coords, y_coords)
-        grid_coords = torch.stack((grid_xx.flatten(), grid_yy.flatten()), dim=1).to(self.device)
-
+        # Create meshgrid and flatten it to list of coordinates
+        mesh = torch.meshgrid(*axes, indexing='ij')  # 'ij' to match indexing order
+        grid_shape = mesh[0].shape  # shape of each grid axis
+        grid_coords = torch.stack([g.reshape(-1) for g in mesh], dim=-1).to(self.device)
+    
         rec_grid_models = self.best_model.decoder(grid_coords)
         rec_grid_models = rec_grid_models * self.transform.std.to(self.device) + self.transform.mean.to(self.device)
 
+        # Compute losses
         grid_losses = self.compute_losses(rec_grid_models, domain, equation, boundaries, PINN_layers)
-        for loss_type in self.loss_types:
-                grid_losses[loss_type] = grid_losses[loss_type].view(grid_xx.shape)
 
-        return grid_losses, grid_xx, grid_yy, rec_grid_models
+        # Reshape losses only if 2D (for plotting)
+        if self.latent_dim == 2:
+            for loss_type in self.loss_types:
+                grid_losses[loss_type] = grid_losses[loss_type].view(grid_shape)
+
+            return grid_losses, [mesh[0], mesh[1]], rec_grid_models
+        else:
+            # Leave losses flat, plotting is disabled
+            return grid_losses, [], rec_grid_models
 
     def plotting(self, trajectory_losses: torch.Tensor, original_trajectory_losses: torch.Tensor,
                  trajectory_coordinates: torch.Tensor, grid_losses: torch.Tensor,
@@ -566,14 +579,15 @@ class PlotLossSurface:
         trajectory_losses, original_trajectory_losses, trajectory_coordinates = \
             self.get_coordinates_and_losses_of_trajectories(grid, domain, equation, boundaries, PINN_layers)
 
-        grid_losses, grid_xx, grid_yy, rec_grid_models = \
+        grid_losses, grid_list, rec_grid_models = \
             self.get_coordinates_and_losses_of_surface(grid, domain, equation, boundaries, PINN_layers)
         
         for loss_type in self.loss_types:
+            print(grid_losses[loss_type])
             raw_state = {
                 'grid_losses': grid_losses[loss_type],
-                'grid_xx': grid_xx,
-                'grid_yy': grid_yy,
+                # 'grid_xx': grid_xx,
+                # 'grid_yy': grid_yy,
                 'trajectory_losses': trajectory_losses[loss_type],
                 'original_trajectory_losses': original_trajectory_losses[loss_type],
                 'trajectory_coordinates': trajectory_coordinates
