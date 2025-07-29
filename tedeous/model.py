@@ -21,6 +21,17 @@ from tedeous.device import device_type
 from tedeous.rl_algorithms import DQNAgent
 from tedeous.rl_environment import EnvRLOptimizer
 
+import wandb
+
+from test.RL_experiments.farm_transotions.load_transitions_into_buffer import load_transitions_to_replay_buffer
+
+# Получаем текущую дату и время в формате YYYY-MM-DD_HH-MM-SS
+timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+
+# Создаём путь с поддиректорией, основанной на дате и времени
+output_dir = os.path.join('.', 'transitions_test', timestamp)
+
+os.makedirs(output_dir, exist_ok=True)
 
 def get_state_shape(loss_surface_params):
     min_x, max_x, xnum = loss_surface_params["x_range"]
@@ -249,6 +260,7 @@ class Model():
                     self.rl_penalty = -1
                     self.net = copy.deepcopy(prev_model)
                     self.solution_cls._model_change(self.net)
+                    self.stop_training = True
                     break
 
                 if rl_agent_params:
@@ -287,7 +299,8 @@ class Model():
 
                 indices_saved_models = np.linspace(0, len(self.saved_models) - 1, n_save_models, dtype=int)
                 self.saved_models = [self.saved_models[i] for i in indices_saved_models]
-
+                if not loss_history:
+                    return None, self.saved_models
                 return loss_history[-1], self.saved_models
 
         if rl_agent_params:
@@ -329,7 +342,7 @@ class Model():
             n_steps = 0
             n_steps_max = 1512
             bufer_start_i = 128#128
-            n_steps_for_optim = 16 # n steps optimize
+            n_steps_for_optim = 128 # n steps optimize
 
             grid = self.domain.build('NN').to(device_type())
             variable_dict = self.domain.variable_dict
@@ -338,6 +351,22 @@ class Model():
             # make_legend(tupe_dqn_class, optimizers)
 
             # while rl_agent_params['n_trajectories'] - idx_traj > 0:
+
+            # ==== PRETRAIN DQN ON OFFLINE BUFFER =========================================
+
+            trans_dir = r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\farm_transotions\wave\data\stohastik_transitions'
+            rl_agent.replay_buffer = load_transitions_to_replay_buffer(
+                rl_agent.replay_buffer,                 # буфер агента
+                trans_dir                               # папка, где лежат transitions_*.pt
+            )
+            # ----------------------------------------------------------------------------
+            # 3) ПРЕДОБУЧИЛИ DQN НА ЭТИХ ПЕРЕХОДАХ
+            rl_agent.optim_()                   # обучает обе головы
+            rl_agent.render_Q_function()            # опционально: графики Q
+            # сбрасываем счётчики, чтоб online-фаза стартовала «с нуля»
+            rl_agent.steps_done = 0
+            rl_agent.opt_step   = 0
+
             while n_steps < n_steps_max:
                 # self.net = self.solution_cls.model
                 # for m in self.net.modules():
@@ -460,24 +489,49 @@ class Model():
                         reward_model_i = reward - prev_reward
                     prev_reward = reward
                     reward_model_i_raw = reward_model_i
-                    reward_model_i -= 0.01 * i
+                    reward_model_i -= 0.05 * i
 
                     if done == 1:
-                        reward_model_i += torch.tensor(100, dtype=torch.int8)
+                        reward_model_i += 3 # нужно менять на меньшую награду, чтобы агент не зацикливался на этом действии
                     elif done == 0:
                         # reward -= 0.01 * i
                         pass
                     elif done == -1:
-                        reward_model_i -= torch.tensor(100, dtype=torch.int8)
+                        reward_model_i = reward
 
                     # if i != 0:
                     #     rl_agent.push_memory((state, next_state, action_raw, reward))
                     # else:
                     #     rl_agent.steps_done -= 1
                     rl_agent.push_memory((state, next_state, action_raw, reward_model_i, \
-                                          abs(done), float(reward_model_i_raw), opt_model_i))
+                                          done, float(reward_model_i_raw), opt_model_i))
                     # for _ in range(32):
                     #     rl_agent.push_memory((state, next_state, dqn_class, reward))
+
+
+                    try:
+                        # Сохраняем entry локально
+                        file_path = os.path.join(output_dir, f'transitions_{rl_agent.steps_done}.pt')
+                        entry = {
+                            'state': state,
+                            'next_state': next_state,
+                            'action': action_raw,
+                            'reward': float(reward),
+                            'done': done, 
+                            'reward_model_raw': float(reward_model_i_raw),
+                            'reward_model': float(reward_model_i),
+                            'opt_model_i': opt_model_i
+                        }
+                        torch.save(entry, file_path)
+
+                        # Логируем тот же файл в W&B
+                        artifact = wandb.Artifact(f"transitions_step_{rl_agent.steps_done}", type="transition")
+                        artifact.add_file(file_path, name=f"entry_step_{rl_agent.steps_done}.pt")
+                        wandb.log_artifact(artifact)
+
+                    except Exception as e:
+                        print(e)
+
 
                     if rl_agent.replay_buffer.__len__() >= bufer_start_i and \
                     rl_agent.replay_buffer.__len__() % n_steps_for_optim == 0:
@@ -491,6 +545,7 @@ class Model():
                     total_reward += reward_model_i
 
                     print(f'\nCurrent reward after {action["type"]} optimizer: {reward}.\n'
+                          f'Reward after taking prev reward and penalty: {reward_model_i}\n'
                           f'Total reward after using {", ".join(optimizers_history)} '
                           f'{"optimizers" if len(optimizers_history) > 1 else "optimizer"}: {total_reward}.\n'
                           f'\ndone = {done}')
@@ -502,8 +557,7 @@ class Model():
                         break
                     elif done == 0:
                         if i == 20:
-                            self.rl_penalty = 0
-                            break
+                            self.rl_penalty = -1 
                     elif done == -1:
                         self.rl_penalty = 0
                         break
@@ -511,7 +565,7 @@ class Model():
                 if done == 1:
                     idx_traj += 1
 
-            self.net = rl_agent.model
+            self.net = rl_agent.model  #неправилно
 
         if isinstance(optimizer, list):
             optimizers_chain = optimizer.copy()
