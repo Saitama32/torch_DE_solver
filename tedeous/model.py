@@ -21,15 +21,14 @@ from tedeous.device import device_type
 from tedeous.rl_algorithms import DQNAgent
 from tedeous.rl_environment import EnvRLOptimizer
 
-import wandb
 
-from test.RL_experiments.farm_transotions.load_transitions_into_buffer import load_transitions_to_replay_buffer
+from test.RL_experiments.Article_exp.load_transitions_into_buffer_pickle import load_transitions_to_replay_buffer
 
 # Получаем текущую дату и время в формате YYYY-MM-DD_HH-MM-SS
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
 # Создаём путь с поддиректорией, основанной на дате и времени
-output_dir = os.path.join('.', 'transitions_test', timestamp)
+output_dir = os.path.join('.', 'Burgers_transitions_test', timestamp)
 
 os.makedirs(output_dir, exist_ok=True)
 
@@ -355,7 +354,7 @@ class Model():
 
             # ==== PRETRAIN DQN ON OFFLINE BUFFER =========================================
 
-            trans_dir = r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\farm_transotions\wave\data\stohastik_transitions'
+            trans_dir = r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\Article_exp\data\burg_state'
             rl_agent.replay_buffer = load_transitions_to_replay_buffer(
                 rl_agent.replay_buffer,                 # буфер агента
                 trans_dir                               # папка, где лежат transitions_*.pt
@@ -495,19 +494,19 @@ class Model():
                     reward_model_i -= 0.05 * i
 
                     if done == 1:
-                        reward_model_i += 3 # поменяли на меньшую награду
+                        reward_model_i += 10 # поменяли на меньшую награду
                     elif done == 0:
                         # reward -= 0.01 * i
                         pass
                     elif done == -1:
-                        reward_model_i = reward_scalar
+                        reward_model_i -= 10
 
                     # if i != 0:
                     #     rl_agent.push_memory((state, next_state, action_raw, reward))
                     # else:
                     #     rl_agent.steps_done -= 1
                     rl_agent.push_memory((state, next_state, action_raw, float(reward_model_i), \
-                                          done, float(reward_model_i_raw), opt_model_i))
+                                          done, float(reward_model_i), opt_model_i))
                     # for _ in range(32):
                     #     rl_agent.push_memory((state, next_state, dqn_class, reward))
 
@@ -528,9 +527,12 @@ class Model():
                         torch.save(entry, file_path)
 
                         # Логируем тот же файл в W&B
-                        artifact = wandb.Artifact(f"transitions_step_{rl_agent.steps_done}", type="transition")
-                        artifact.add_file(file_path, name=f"entry_step_{rl_agent.steps_done}.pt")
-                        wandb.log_artifact(artifact)
+                        rl_agent_params['exp'].log_asset(
+                            file_path,
+                            file_name=f"entry_step_{rl_agent.steps_done}.pt",
+                            step=rl_agent.steps_done,
+                            overwrite=True
+                        )
 
                     except Exception as e:
                         print(e)
@@ -553,8 +555,8 @@ class Model():
                           f'{"optimizers" if len(optimizers_history) > 1 else "optimizer"}: {total_reward}.\n'
                           f'\ndone = {done}')
 
-                    callbacks.callbacks[1].save_every = self.t
-                    env.render()
+                    # callbacks.callbacks[1].save_every = self.t
+                    # env.render()
 
                     if done == 1:
                         break

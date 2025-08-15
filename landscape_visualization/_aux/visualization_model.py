@@ -136,7 +136,7 @@ class VisualizationModel:
 
             range_of_files_for_anchor = range(len(pt_files))
 
-            rec_data_loader, transform = get_trajectory_dataloader(batch_size, pt_files=pt_files)
+            rec_data_loader, transform = get_trajectory_dataloader(batch_size, pt_files=pt_files, device=self.device)
 
         else:
             solver_models_state_dicts = [solver_model.state_dict() for solver_model in solver_models]
@@ -178,7 +178,7 @@ class VisualizationModel:
                 (data_trajectory_dataset_temp_0 - data_trajectory_dataset_temp_last).pow(2).sum(dim=-1)).to(self.device)
         if self.isEnabled('wellspacedtrajectory'):
             self.loss_dict['wellspacedtrajectory']['dataloader'], _ = get_trajectory_dataloader(
-                len(pt_files), pt_files=pt_files, shuffle=False
+                len(pt_files), pt_files=pt_files, shuffle=False, device=self.device
             )
 
         return input_dim
