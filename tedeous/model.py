@@ -20,6 +20,7 @@ from tedeous.device import device_type
 
 from tedeous.rl_algorithms import DQNAgent
 from tedeous.rl_environment import EnvRLOptimizer
+import os
 
 
 from test.RL_experiments.Article_exp.load_transitions_into_buffer_pickle import load_transitions_to_replay_buffer
@@ -259,7 +260,7 @@ class Model():
                     self.rl_penalty = -1
                     self.net = copy.deepcopy(prev_model)
                     self.solution_cls._model_change(self.net)
-                    self.stop_training = True
+                    callbacks.set_model(self)
                     break
 
                 if rl_agent_params:
@@ -348,6 +349,7 @@ class Model():
             variable_dict = self.domain.variable_dict
             bconds = self.conditions.build(variable_dict)
 
+            # tupe_dqn_class = get_tup_actions(optimizers)
             # make_legend(tupe_dqn_class, optimizers)
 
             # while rl_agent_params['n_trajectories'] - idx_traj > 0:
@@ -368,13 +370,7 @@ class Model():
             rl_agent.opt_step   = 0
 
             while n_steps < n_steps_max:
-                # self.net = self.solution_cls.model
-                # for m in self.net.modules():
-                #     if isinstance(m, torch.nn.Linear):
-                #         torch.nn.init.xavier_normal_(m.weight)
-                #         torch.nn.init.zeros_(m.bias)
                 self.net.apply(self.reinit_weights)
-                #self.net = self.solution_cls.model
                 self.solution_cls._model_change(self.net)
                 self.t = 1
                 callbacks.set_model(self)
@@ -452,9 +448,14 @@ class Model():
                         net_predicted = net(grid)
                         operator_rmse = torch.sqrt(torch.mean((exact.reshape(-1, 1) - net_predicted) ** 2))
 
-                    boundary_rmse = torch.sum(torch.tensor([
-                        torch.sqrt(torch.mean((bconds[i]["bval"].reshape(-1, 1) - net(bconds[i]["bnd"])) ** 2))
-                        for i in range(len(bconds))]))
+                    boundary_rmse = torch.sum(torch.stack([
+                        torch.sqrt(torch.mean(
+                            (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
+                        ))
+                        for b in bconds
+                    ]))
+                    
+                    print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
 
                     env.solver_models = solver_models
                     env.reward_params = {

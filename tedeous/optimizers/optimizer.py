@@ -6,7 +6,6 @@ from tedeous.optimizers.ngd import NGD
 from tedeous.optimizers.CSO import CSO
 from tedeous.optimizers.nys_newton_cg import NysNewtonCG
 from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingWarmRestarts
-from geoopt.optim import RiemannianAdam
 
 
 class Optimizer():
@@ -46,8 +45,6 @@ class Optimizer():
             torch_optim = torch.optim.Adam
         if self.optimizer == 'AdamW':
             torch_optim = torch.optim.AdamW
-        elif self.optimizer == 'RAdam':
-            torch_optim = RiemannianAdam
         elif self.optimizer == 'SGD':
             torch_optim = torch.optim.SGD
         elif self.optimizer == 'LBFGS':

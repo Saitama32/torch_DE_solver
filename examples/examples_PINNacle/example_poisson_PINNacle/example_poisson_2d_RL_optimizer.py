@@ -15,7 +15,7 @@ from tedeous.device import solver_device
 from tedeous.utils import exact_solution_data
 
 solver_device('cpu')
-data_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../PINNacle_data/poisson1_cg_data.npy"))
+data_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../PINNacle_data/poisson1_cg_data.npy"))
 
 
 def poisson_2d_classic_experiment(grid_res):
