@@ -415,6 +415,27 @@ class DQNAgent:
             torch.save(self.model_params.state_dict(), tmp_params.name)
             params_path = tmp_params.name
 
+        # --- логируем как модельные файлы ---
+        self.exp.log_model(
+            name="rl_agent_optim",
+            file_or_folder=optim_path,
+            file_name=f"model_optim_step_{self.steps_done}.pt",
+            overwrite=True,
+            metadata={"type": "optimizer_state", "step": self.steps_done}
+        )
+
+        self.exp.log_model(
+            name="rl_agent_params",
+            file_or_folder=params_path,
+            file_name=f"model_params_step_{self.steps_done}.pt",
+            overwrite=True,
+            metadata={"type": "model_state", "step": self.steps_done}
+        )
+
+        # Дополнительно можно залогировать "человеческий" тег версии
+        self.exp.log_other("model_snapshot_step", self.steps_done)
+
+
         # self.replay_buffer.memory = deque(filter(lambda x: x not in set(buff_test), self.replay_buffer.memory),
         #                                   maxlen=self.replay_buffer.memory.maxlen)
        

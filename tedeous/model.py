@@ -326,7 +326,8 @@ class Model():
                                 lr=rl_agent_params["lr"],
                                 device=device_type(),
                                 batch_size=rl_agent_params["rl_batch_size"],
-                                exp = rl_agent_params["exp"],)
+                                n_transitions_reinit = rl_agent_params["n_transitions_reinit"],
+                                exp = rl_agent_params["exp"])
 
             # Optimization of the RL algorithm is implemented in the file rl_algorithms
             optimizers = optimizer.copy()
