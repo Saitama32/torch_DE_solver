@@ -20,7 +20,7 @@ import tempfile
 
 
 GAMMA = 0.95
-EPS_START = 0.5
+EPS_START = 0.35
 EPS_END = 0.05
 EPS_DECAY = 1000
 TAU = 0.01
@@ -43,117 +43,6 @@ class ReplayBuffer:
 
     def __len__(self):
         return len(self.memory)
-    
-# class DQN_optim(nn.Module):
-#     def __init__(self, optim_n):
-#         super(DQN_optim, self).__init__()
-#         self.conv1 = nn.Conv2d(2, 16, kernel_size=3, stride=1, padding=1)
-#         self.relu1 = nn.ReLU()
-#         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
-#         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
-#         self.relu2 = nn.ReLU()
-#         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
-
-#         self.fc1 = nn.Linear(6 * 6 * 32, 256)  # n_observation instead 6 * 6
-#         self.relu3 = nn.ReLU()
-#         self.fc2 = nn.Linear(256, 128)
-#         self.fc3 = nn.Linear(128, 64)
-
-#         self.fc_optim_class = nn.Linear(64, optim_n)
-#         # self.fc4 = nn.Linear(80, optim_n)
-
-#         self.softmax = nn.Softmax()
-#         self.relu = nn.ReLU()
-
-#     def forward(self, x):
-#         x = self.pool1(self.relu1(self.conv1(x)))
-#         x = self.pool2(self.relu2(self.conv2(x)))
-#         x_optim = x.view(-1, 6 * 6 * 32)
-#         x = self.relu(self.fc1(x_optim))
-#         x = self.relu(self.fc2(x))
-#         x = self.relu(self.fc3(x))
-#         x = self.softmax(self.fc_optim_class(x))
-#         return x_optim, x
-    
-# class DQN_params(nn.Module):
-#     def __init__(self, optimizer_dict):
-#         super(DQN_params, self).__init__()
-#         self.optimizer_dict = optimizer_dict
-#         layers_ar = []
-#         fc_liner = lambda param_var: (nn.Linear(6 * 6 * 32, 256), nn.Linear(256, 128), nn.Linear(128, 64),  nn.Linear(64, len(param_var)))
-#         self.fc_param_by_opt = defaultdict(defaultdict)
-#         for opt_name in self.optimizer_dict.keys():
-#             for param_name in self.optimizer_dict[opt_name].keys():
-#                 param_var = self.optimizer_dict[opt_name][param_name]
-#                 # self.fc_param_by_opt[opt_name][param_name] = nn.Linear(128, len(param_var))
-#                 linear_layer = fc_liner(param_var)
-#                 self.fc_param_by_opt[opt_name][param_name] = linear_layer
-#                 layers_ar += list(linear_layer)
-#         self.linears = nn.ModuleList(layers_ar)
-            
-#         self.softmax = nn.Softmax()
-
-#     def forward(self, x, optim_name_ar):
-#         x_params_ar = []
-#         for i, optim_name in enumerate(optim_name_ar):
-#             x_params = {}
-#             for param in self.fc_param_by_opt[optim_name].keys():
-#                 param_liner = self.fc_param_by_opt[optim_name][param]
-#                 x_ = x[i]
-#                 for fc_lin in param_liner:
-#                     x_ = fc_lin(x_)
-#                 x_params[param] = self.softmax(x_)
-#             x_params_ar.append(x_params)
-#         return x_params_ar
-
-# class DQN(nn.Module):
-#     def __init__(self, n_observation, optimizer_dict):
-#         super(DQN, self).__init__()
-#         self.conv1 = nn.Conv2d(2, 16, kernel_size=3, stride=1, padding=1)
-#         self.relu1 = nn.ReLU()
-#         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
-#         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
-#         self.relu2 = nn.ReLU()
-#         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
-
-#         self.n_observation = n_observation
-#         self.optimizer_dict = optimizer_dict
-
-#         self.fc1 = nn.Linear(6 * 6 * 32, 128)  # n_observation instead 6 * 6
-#         self.relu3 = nn.ReLU()
-#         self.fc_optim_class = nn.Linear(128, len(self.optimizer_dict.keys()))
-#         self.opt2class = {}
-#         self.param2class = {}
-#         self.fc_param_by_opt = defaultdict(defaultdict)
-#         opt_i = 0
-#         for opt_name in self.optimizer_dict.keys():
-#             param_i = 0
-#             self.opt2class[opt_i] = opt_name
-#             for param_name in self.optimizer_dict[opt_name].keys():
-#                 param_var = self.optimizer_dict[opt_name][param_name]
-#                 if param_name not in self.param2class:
-#                     self.param2class[param_i] = param_name
-#                 self.fc_param_by_opt[opt_name][param_name] = nn.Linear(128, len(param_var))
-#                 param_i += 1
-#             opt_i += 1
-
-#         self.softmax = nn.Softmax()
-
-#     def forward(self, x):
-#         x = self.pool1(self.relu1(self.conv1(x)))
-#         x = self.pool2(self.relu2(self.conv2(x)))
-#         x = x.view(-1, 6 * 6 * 32)
-#         x = self.relu3(self.fc1(x))
-#         x_optim = self.softmax(self.fc_optim_class(x))
-#         optim_name_ar = [self.opt2class[int(el)] for el in torch.argmax(x_optim, dim=1)]
-#         x_params_ar = []
-#         for i_optim, optim_name in enumerate(optim_name_ar):
-#             x_params = {}
-#             for param in self.fc_param_by_opt[optim_name].keys():
-#                 param_liner = self.fc_param_by_opt[optim_name][param]
-#                 x_params[param] = self.softmax(param_liner(x[i_optim]))
-#             x_params_ar.append(x_params)
-#         return x_optim, x_params_ar
 
 
 class DQNAgent:
@@ -185,8 +74,9 @@ class DQNAgent:
 
         self.model_optim = DQN_optim(len(self.i2opt)).to(device)
         self.model_params = DQN_params(self.optimizer_dict).to(device)
-        watch(self.model_optim, log_step_interval = 200)
-        watch(self.model_params, log_step_interval = 200)
+        if self.exp is not None:
+            watch(self.model_optim, log_step_interval = 200)
+            watch(self.model_params, log_step_interval = 200)
 
         self.reinit_target()
 
@@ -246,8 +136,10 @@ class DQNAgent:
 
         transition_counter = 0  # счётчик обработанных переходов
 
-        while len(self.replay_buffer_copy.memory) >= self.batch_size:
-            buff_test = self.replay_buffer_copy.sample(self.batch_size)
+        while len(self.replay_buffer_copy.memory) > 0:
+
+            current_batch_size = min(self.batch_size, len(self.replay_buffer_copy.memory)) # на случай, если в буфере осталось меньше, чем batch_size
+            buff_test = self.replay_buffer_copy.sample(current_batch_size)
 
             transition_equal = lambda t1, t2: (
                 all(torch.equal(t1.state[k],      t2.state[k])      for k in t1.state) and
@@ -283,7 +175,7 @@ class DQNAgent:
             targets = lambda reward, done, target_res: \
                     reward + (1 - abs(done)) * self.gamma * torch.max(target_res, dim=1).values
             q_values = lambda model_res, action_: \
-                    model_res[torch.arange(self.batch_size), action_]
+                    model_res[torch.arange(current_batch_size), action_]
             
             with torch.no_grad():
                 targets_optim = targets(reward, done, target_optim)
@@ -352,7 +244,7 @@ class DQNAgent:
             model_reward_i_ar += model_reward[(opt_model_i == self.opt_step).nonzero()].reshape(-1).tolist()
             
             print("\nRL optimization is complete!\n")
-            transition_counter += self.batch_size  # <--- прибавляем размер батча
+            transition_counter += current_batch_size  # <--- прибавляем размер батча
 
             # Условие обновления таргетной сети
             if transition_counter >= self.n_transitions_reinit:
@@ -369,8 +261,22 @@ class DQNAgent:
         # Подсчёт: плохое завершение — done == -1 и reward < 0
         count_bad_end = torch.sum((done_tensor == -1) & (reward_tensor < 0)).item()
 
+        # матрица сопряжённости, чтобы сразу увидеть, почему пересечений нет
+        sign_reward = torch.sign(reward_tensor).clamp(min=-1, max=1)  # -1, 0, 1
+        for d in (-1, 0, 1):
+            row_mask = (done_tensor == d)
+            c_neg = ((row_mask) & (sign_reward == -1)).sum().item()
+            c_zero = ((row_mask) & (sign_reward ==  0)).sum().item()
+            c_pos = ((row_mask) & (sign_reward ==  1)).sum().item()
+            print(f"done={d}: reward<0={c_neg}, reward==0={c_zero}, reward>0={c_pos}")
+
+
         print(f"Count of good ends: {count_good_end}")
-        print(f"Count of bad ends: {count_bad_end}")    
+        print(f"Count of bad ends: {count_bad_end}") 
+
+        print("done counts:", (done_tensor == 1).sum().item(), (done_tensor == -1).sum().item())
+        print("reward>0:", (reward_tensor > 0).sum().item(), "reward<0:", (reward_tensor < 0).sum().item())
+   
         
         # mean_batch_loss_optim_class = 0
         # for el in loss_arr_optim_class:
@@ -392,48 +298,50 @@ class DQNAgent:
         print(f"Mean batch loss optim class: {optim_batch_loss_mean}")
         print(f"Mean batch loss param: {param_batch_loss_mean}")
 
-        self.exp.log_metric("optim_batch_loss_mean", optim_batch_loss_mean, step=self.steps_done)
-        self.exp.log_metric("optim_batch_loss_median", statistics.median(loss_arr_optim_class), step=self.steps_done)
-        self.exp.log_metric("param_batch_loss_mean", param_batch_loss_mean, step=self.steps_done)
-        self.exp.log_metric("param_batch_loss_median", statistics.median(loss_arr_param), step=self.steps_done)
-        self.exp.log_metric("steps_done", self.steps_done, step=self.steps_done)
-        self.exp.log_metric("all_rewards_mean", statistics.mean(reward_tensor.tolist()), step=self.steps_done)
-        self.exp.log_metric("agent_reward_mean", statistics.mean(model_reward_i_ar), step=self.steps_done)
-        self.exp.log_metric("agent_reward_median", statistics.median(model_reward_i_ar), step=self.steps_done)
-        self.exp.log_metric("bad_action_procent", len(bad_action)/len(model_reward_i_ar), step=self.steps_done)
-        self.exp.log_metric("count_good_end", count_good_end, step=self.steps_done)
-        self.exp.log_metric("count_bad_end", count_bad_end, step=self.steps_done)
+        if self.exp is not None:
+
+            self.exp.log_metric("optim_batch_loss_mean", optim_batch_loss_mean, step=self.steps_done)
+            self.exp.log_metric("optim_batch_loss_median", statistics.median(loss_arr_optim_class), step=self.steps_done)
+            self.exp.log_metric("param_batch_loss_mean", param_batch_loss_mean, step=self.steps_done)
+            self.exp.log_metric("param_batch_loss_median", statistics.median(loss_arr_param), step=self.steps_done)
+            self.exp.log_metric("steps_done", self.steps_done, step=self.steps_done)
+            self.exp.log_metric("all_rewards_mean", statistics.mean(reward_tensor.tolist()), step=self.steps_done)
+            self.exp.log_metric("agent_reward_mean", statistics.mean(model_reward_i_ar), step=self.steps_done)
+            self.exp.log_metric("agent_reward_median", statistics.median(model_reward_i_ar), step=self.steps_done)
+            self.exp.log_metric("bad_action_procent", len(bad_action)/len(model_reward_i_ar), step=self.steps_done)
+            self.exp.log_metric("count_good_end", count_good_end, step=self.steps_done)
+            self.exp.log_metric("count_bad_end", count_bad_end, step=self.steps_done)
 
 
 
-         # Сохраняем модель во временные файлы
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp_optim:
-            torch.save(self.model_optim.state_dict(), tmp_optim.name)
-            optim_path = tmp_optim.name
+            # Сохраняем модель во временные файлы
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp_optim:
+                torch.save(self.model_optim.state_dict(), tmp_optim.name)
+                optim_path = tmp_optim.name
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp_params:
-            torch.save(self.model_params.state_dict(), tmp_params.name)
-            params_path = tmp_params.name
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp_params:
+                torch.save(self.model_params.state_dict(), tmp_params.name)
+                params_path = tmp_params.name
 
-        # --- логируем как модельные файлы ---
-        self.exp.log_model(
-            name="rl_agent_optim",
-            file_or_folder=optim_path,
-            file_name=f"model_optim_step_{self.steps_done}.pt",
-            overwrite=True,
-            metadata={"type": "optimizer_state", "step": self.steps_done}
-        )
+            # --- логируем как модельные файлы ---
+            self.exp.log_model(
+                name="rl_agent_optim",
+                file_or_folder=optim_path,
+                file_name=f"model_optim_step_{self.steps_done}.pt",
+                overwrite=True,
+                metadata={"type": "optimizer_state", "step": self.steps_done}
+            )
 
-        self.exp.log_model(
-            name="rl_agent_params",
-            file_or_folder=params_path,
-            file_name=f"model_params_step_{self.steps_done}.pt",
-            overwrite=True,
-            metadata={"type": "model_state", "step": self.steps_done}
-        )
+            self.exp.log_model(
+                name="rl_agent_params",
+                file_or_folder=params_path,
+                file_name=f"model_params_step_{self.steps_done}.pt",
+                overwrite=True,
+                metadata={"type": "model_state", "step": self.steps_done}
+            )
 
-        # Дополнительно можно залогировать "человеческий" тег версии
-        self.exp.log_other("model_snapshot_step", self.steps_done)
+            # Дополнительно можно залогировать "человеческий" тег версии
+            self.exp.log_other("model_snapshot_step", self.steps_done)
 
 
         # self.replay_buffer.memory = deque(filter(lambda x: x not in set(buff_test), self.replay_buffer.memory),

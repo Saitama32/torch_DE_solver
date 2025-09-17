@@ -22,8 +22,17 @@ from tedeous.rl_algorithms import DQNAgent
 from tedeous.rl_environment import EnvRLOptimizer
 import os
 
+import torch, random, numpy as np
+torch.manual_seed(1438)
+np.random.seed(1438)
+random.seed(1438)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 
 from test.RL_experiments.Article_exp.load_transitions_into_buffer_pickle import load_transitions_to_replay_buffer
+from test.RL_experiments.utils import filter_replay_buffer_by_done, shift_model_reward, concat_replay_buffers
+from test.RL_experiments.render_true_Q_dist import render_q_classes_from_buffer
 
 # Получаем текущую дату и время в формате YYYY-MM-DD_HH-MM-SS
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -237,10 +246,14 @@ class Model():
 
             loss_history = []
 
+            if not hasattr(self, "best_loss"):
+                self.best_loss = float("inf")
+            if not hasattr(self, "best_model"):
+                self.best_model = copy.deepcopy(self.net)
+
             while self.t < epochs and not self.stop_training:
                 callbacks.on_epoch_begin()
                 self.optimizer.zero_grad()
-                prev_model = copy.deepcopy(self.net)
 
                 iter_count = 1 if self.batch_size is None else self.solution_cls.operator.n_batches
                 for _ in range(iter_count):  # if batch mod then iter until end of batches else only once
@@ -250,18 +263,23 @@ class Model():
                         # loss_history.append(loss)
                     else:
                         self.optimizer.step(closure)
-                    if optimizer.gamma is not None and self.t % optimizer.decay_every == 0:
+                    if optimizer.gamma is not None and self.t % optimizer.decay_every == 0: # тут ошибка кажется 
                         optimizer.sheduler.step()
 
                 loss = float(self.cur_loss.item()) if isinstance(self.cur_loss, torch.Tensor) else float(self.cur_loss)
 
                 if not np.isfinite(loss) or loss > 1e3:
                     print(f'[{datetime.datetime.now()}] Step = {self.t}, loss is not finite or too large: {loss}. Breaking early.')
-                    self.rl_penalty = -1
-                    self.net = copy.deepcopy(prev_model)
+                    if len(loss_history) < 10:
+                        self.rl_penalty = -1
+                    self.net = copy.deepcopy(self.best_model)
                     self.solution_cls._model_change(self.net)
                     callbacks.set_model(self)
                     break
+
+                if loss < self.best_loss:
+                    self.best_loss = loss
+                    self.best_model = copy.deepcopy(self.net)
 
                 if rl_agent_params:
                     current_model = copy.deepcopy(self.net)
@@ -329,9 +347,6 @@ class Model():
                                 n_transitions_reinit = rl_agent_params["n_transitions_reinit"],
                                 exp = rl_agent_params["exp"])
 
-            # Optimization of the RL algorithm is implemented in the file rl_algorithms
-            optimizers = optimizer.copy()
-
             state_shape = get_state_shape(loss_surface_params)
 
             # # state = torch init -> AE_model
@@ -358,17 +373,51 @@ class Model():
             # ==== PRETRAIN DQN ON OFFLINE BUFFER =========================================
 
             trans_dir = r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\Article_exp\data\burg_state'
-            rl_agent.replay_buffer = load_transitions_to_replay_buffer(
+            replay_buffer_stohastic = load_transitions_to_replay_buffer(
                 rl_agent.replay_buffer,                 # буфер агента
                 trans_dir                               # папка, где лежат transitions_*.pt
             )
+
+            rl_agent.replay_buffer = shift_model_reward(replay_buffer_stohastic, shift_value=50.0, allowed_done=[1])
             # ----------------------------------------------------------------------------
             # 3) ПРЕДОБУЧИЛИ DQN НА ЭТИХ ПЕРЕХОДАХ
             rl_agent.optim_()                   # обучает обе головы
             rl_agent.render_Q_function()            # опционально: графики Q
             # сбрасываем счётчики, чтоб online-фаза стартовала «с нуля»
-            rl_agent.steps_done = 0
-            rl_agent.opt_step   = 0
+            rl_agent.steps_done = 1
+            rl_agent.opt_step   = 1
+
+            replay_buffer_stohastic_dones = filter_replay_buffer_by_done(replay_buffer_stohastic, allowed_done=[1], every_n=4)
+
+
+            # очищаяем буфер, чтобы не мешался в online-обучении
+            rl_agent.replay_buffer = ReplayBuffer(rl_agent_params["rl_buffer_size"])
+            # Загрузка прогресса
+            trans_dir = r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\Burgers\data\Danil_22_08'
+            
+            replay_buffer_agent = load_transitions_to_replay_buffer(
+                ReplayBuffer(rl_agent_params["rl_buffer_size"]),                 # буфер агента
+                trans_dir                               # папка, где лежат transitions_*.pt
+            )
+
+            replay_buffer_concat = concat_replay_buffers(replay_buffer_stohastic_dones, replay_buffer_agent)
+
+            rl_agent.replay_buffer = shift_model_reward(replay_buffer_concat, shift_value=50.0, allowed_done=[1])
+
+            rl_agent.replay_buffer = replay_buffer_concat
+
+            # rl_agent.n_transitions_reinit = 500
+
+            rl_agent.optim_()                   # обучает обе головы
+
+            render_q_classes_from_buffer(rl_agent, rl_agent.replay_buffer, max_states=700, strategy="all", done_filter=0,
+                             title_suffix="all", savepath="q_classes_all_{}.png".format("after_train_agent_on_exp"))
+
+            # сбрасываем счётчики, чтоб online-фаза стартовала «с нуля»
+            rl_agent.steps_done = 2
+            rl_agent.opt_step   = 2
+            rl_agent.n_transitions_reinit = 1000
+            rl_agent.replay_buffer = ReplayBuffer(rl_agent_params["rl_buffer_size"])
 
             while n_steps < n_steps_max:
                 self.net.apply(self.reinit_weights)
@@ -398,6 +447,10 @@ class Model():
                     action_raw[2]['epochs'] = action_raw[1]
                     action_raw = (action_raw[0], action_raw[2])
                     # action_raw = tupe_dqn_class[dqn_class]
+                    if is_model:
+                        print("Action by model")
+                    else:
+                        print("Action by epsilon-greedy")
                     print(f"\naction = {action}")
                     # i_optim, i_epochs, i_loss = action_raw
                     # action = {
@@ -563,7 +616,7 @@ class Model():
                     if done == 1:
                         break
                     elif done == 0:
-                        if i == 20:
+                        if i == 10:
                             self.rl_penalty = -1 
                     elif done == -1:
                         self.rl_penalty = 0
