@@ -62,6 +62,7 @@ class Solution():
         equal_copy = deepcopy(equal_cls)
         prepared_operator = equal_copy.operator_prepare()
         self._operator_coeff(equal_cls, prepared_operator)
+        self.prepared_operator = prepared_operator     
         self.prepared_bconds = equal_copy.bnd_prepare()
         self.model = model.to(device_type())
         self.mode = mode
@@ -113,18 +114,26 @@ class Solution():
         Args:
             new_model (torch.nn.Module): new self model.
         """
-        self.model = new_model
-        self.operator.model = new_model
-        self.operator.derivative = Derivative(new_model, self.derivative_points).set_strategy(
-            self.mode).take_derivative
-        self.boundary.model = new_model
-        self.boundary.operator = Operator(self.grid,
-                                          self.prepared_bconds,
-                                          new_model,
-                                          self.mode,
-                                          self.weak_form,
-                                          self.derivative_points,
-                                          self.batch_size)
+        self.model = new_model.to(device_type())
+        
+        self.operator = Operator(
+        self.grid,
+        self.prepared_operator,   # (добавь это поле в __init__)
+        self.model,
+        self.mode,
+        self.weak_form,
+        self.derivative_points,
+        self.batch_size
+        )
+
+        self.boundary = Bounds(
+            self.grid,
+            self.prepared_bconds,
+            self.model,
+            self.mode,
+            self.weak_form,
+            self.derivative_points
+        )
 
     def evaluate(self,
                  save_graph: bool = True) -> Tuple[torch.Tensor, torch.Tensor]:
