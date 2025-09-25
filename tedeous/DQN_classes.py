@@ -1,92 +1,99 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
+import torch.nn.functional as F
 from collections import defaultdict
 
-class DQN_optim(nn.Module):
-    def __init__(self, optim_n):
+# ---- общий экстрактор (оставь свой, если отличается) ----
+class ConvEncoder(nn.Module):
+    def __init__(self):
         super().__init__()
         self.backbone = nn.Sequential(
-            nn.Conv2d(2, 16, 3, padding=1), nn.BatchNorm2d(16), nn.ReLU(), nn.Dropout2d(p=0.1),
-            nn.MaxPool2d(2),
-            nn.Conv2d(16, 32, 3, padding=1), nn.BatchNorm2d(32), nn.ReLU(), nn.Dropout2d(p=0.1),
-            nn.MaxPool2d(2),
-            nn.Conv2d(32, 64, 3, padding=1), nn.BatchNorm2d(64), nn.ReLU(), nn.Dropout2d(p=0.1)
+            nn.Conv2d(2, 32, 3, stride = 3, padding=1),
+            nn.Conv2d(32, 64, 3, stride = 2, padding=1), 
+            nn.Conv2d(64, 64, 3, padding=1),
         )
-        self.gap = nn.AdaptiveAvgPool2d(1)   # → (B,64,1,1)
-        self.head = nn.Sequential(
+        self.gap  = nn.AdaptiveAvgPool2d(1)
+        self.mlp  = nn.Sequential(
             nn.Flatten(),
             nn.Linear(64, 128), nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(128, 64),  nn.ReLU(),
+            nn.Linear(128, 64), nn.ReLU(),
         )
-        self.fc_optim_class = nn.Linear(64, optim_n)
-        # self.softmax  = nn.Softmax(dim=1)
-
-        for m in self.modules():                 # He init
+        for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
 
     def forward(self, x):
         x = self.backbone(x)
         flat = self.gap(x).view(x.size(0), -1)
-        h    = self.head(flat)
-        return flat, self.fc_optim_class(h)
-    
+        h = self.mlp(flat)              # (B,64)
+        return flat, h
 
-# class DQN_params(nn.Module):
-#     def __init__(self, optimizer_dict):
-#         super(DQN_params, self).__init__()
-#         self.optimizer_dict = optimizer_dict
-#         layers_ar = []
-#         fc_liner = lambda param_var: (nn.Linear(64, 128), nn.ReLU(), nn.Dropout(0.3),
-#                                 nn.Linear(128, 64), nn.ReLU(), 
-#                                 nn.Linear(64, len(param_var)))
-#         self.fc_param_by_opt = defaultdict(defaultdict)
-#         for opt_name in self.optimizer_dict.keys():
-#             for param_name in self.optimizer_dict[opt_name].keys():
-#                 param_var = self.optimizer_dict[opt_name][param_name]
-#                 # self.fc_param_by_opt[opt_name][param_name] = nn.Linear(128, len(param_var))
-#                 linear_layer = fc_liner(param_var)
-#                 self.fc_param_by_opt[opt_name][param_name] = linear_layer
-#                 layers_ar += list(linear_layer)
-#         self.linears = nn.ModuleList(layers_ar)
+# ---- дуэлинговая голова (скалярные Q) ----
+class DuelingHead(nn.Module):
+    def __init__(self, hidden_dim, n_actions):
+        super().__init__()
+        self.adv = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, n_actions),
+        )
+        self.val = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, 1),
+        )
+        # удобно для твоей старой визуализации «весов класса»
+        self.fc_out_adv = self.adv[-1]
 
-#     def forward(self, x, optim_name_ar):
-#         x_params_ar = []
-#         for i, optim_name in enumerate(optim_name_ar):
-#             x_params = {}
-#             for param in self.fc_param_by_opt[optim_name].keys():
-#                 param_liner = self.fc_param_by_opt[optim_name][param]
-#                 x_ = x[i]
-#                 for fc_lin in param_liner:
-#                     x_ = fc_lin(x_)
-#                 x_params[param] = x_
-#             x_params_ar.append(x_params)
-#         return x_params_ar
-    
+    def forward(self, h):                # (B,hidden_dim) -> (B,A)
+        adv = self.adv(h)
+        val = self.val(h)
+        q = val + adv - adv.mean(dim=1, keepdim=True)
+        return q
 
+# ---- выбор оптимизатора (действие верхнего уровня) ----
+class DQN_optim(nn.Module):
+    def __init__(self, optim_n):
+        super().__init__()
+        self.encoder = ConvEncoder()
+        self.head    = DuelingHead(64, optim_n)
+        self.fc_optim_class = self.head.fc_out_adv  # совместимость с твоими графиками
+
+    def forward(self, x):
+        flat, h = self.encoder(x)
+        q = self.head(h)                 # (B, optim_n)
+        return flat, q
+
+# ---- выбор параметров по оптимизатору ----
 class DQN_params(nn.Module):
+    """
+    optimizer_dict = {
+        'adam': {'epochs': [...], 'lr': [...], 'betas': [...]},
+        'lbfgs': {'epochs': [...], 'history_size': [...], ...},
+        ...
+    }
+    """
     def __init__(self, optimizer_dict):
         super().__init__()
+        self.encoder = ConvEncoder()
         self.optimizer_dict = optimizer_dict
         self.fc_param_by_opt = nn.ModuleDict()
-
         for opt_name, param_dict in optimizer_dict.items():
             self.fc_param_by_opt[opt_name] = nn.ModuleDict()
-            for param_name, param_values in param_dict.items():
-                self.fc_param_by_opt[opt_name][param_name] = nn.Sequential(
-                    nn.Linear(64, 128), nn.ReLU(), nn.Dropout(0.3),
-                    nn.Linear(128, 64), nn.ReLU(),
-                    nn.Linear(64, len(param_values))
-                )
+            for param_name, values in param_dict.items():
+                self.fc_param_by_opt[opt_name][param_name] = DuelingHead(64, len(values))
 
     def forward(self, x, optim_name_ar):
-        x_params_ar = []
-        for i, optim_name in enumerate(optim_name_ar):
-            x_params = {}
-            for param_name, net in self.fc_param_by_opt[optim_name].items():
-                x_ = x[i]
-                x_params[param_name] = net(x_)
-            x_params_ar.append(x_params)
-        return x_params_ar
+        """
+        x: (B,2,26,26) — если подаёшь «сырые» карты, сначала прогоню через encoder.
+        Либо подай уже (B,64) — тогда распознаю и не буду повторно кодировать.
+        """
+        if x.dim() == 4:                 # (B,2,26,26)
+            flat, h = self.encoder(x)
+        else:                            # (B,64)
+            flat, h = x, x
+
+        out = []
+        for i, opt_name in enumerate(optim_name_ar):
+            heads = self.fc_param_by_opt[opt_name]
+            q_dict = {pname: heads[pname](h[i:i+1]).squeeze(0) for pname in heads}  # (n_choices,)
+            out.append(q_dict)
+        return out

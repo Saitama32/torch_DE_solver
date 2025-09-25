@@ -20,34 +20,66 @@ import tempfile
 
 
 GAMMA = 0.95
-EPS_START = 0.35
+EPS_START = 0.7
 EPS_END = 0.05
 EPS_DECAY = 1000
 TAU = 0.01
 
 Transition = namedtuple('Transition',
                         ('state', 'next_state', 'action', 'reward', 'done', 'model_reward', 'opt_model_i'))
+    
 
-
-class ReplayBuffer:
-    def __init__(self, capacity):
-        self.memory = deque()
-
-    def push(self, *args):
-        self.memory.append(Transition(*args))
-
-    def sample(self, batch_size):
-        current_sample = random.sample(self.memory, batch_size)
-        # current_sample_tuples = [tuple(t) for t in current_sample]
-        return current_sample
+# ---------- Prioritized Experience Replay (proportional) ----------
+class PrioritizedReplayBuffer:
+    def __init__(self, capacity, alpha=0.6, eps=1e-6):
+        self.capacity = capacity
+        self.alpha = alpha
+        self.eps = eps
+        self.memory, self.prior, self.pos = [], [], 0
 
     def __len__(self):
         return len(self.memory)
 
+    def push(self, *args, priority=None):
+        # args: (state, next_state, action, reward, done, model_reward, opt_model_i)
+        tr = Transition(*args)
+        if priority is None:
+            p = max(self.prior) if self.prior else 1.0
+        else:
+            p = float(priority)
+
+        if len(self.memory) < self.capacity:
+            self.memory.append(tr); self.prior.append(p)
+        else:
+            self.memory[self.pos] = tr; self.prior[self.pos] = p
+            self.pos = (self.pos + 1) % self.capacity
+
+    def sample(self, batch_size, beta=0.4, device='cpu'):
+        pr = torch.tensor(self.prior, dtype=torch.float, device=device)
+        probs = (pr + self.eps) ** self.alpha
+        probs = probs / probs.sum()
+
+        idxs = torch.multinomial(
+            probs, batch_size,
+            replacement=len(self.memory) < batch_size
+        )
+
+        # w_j = (N * P(j))^{-β} / max_i w_i
+        N = len(self.memory)
+        weights = (N * probs[idxs]).pow(-beta)
+        weights = (weights / weights.max()).float()
+
+        batch = [self.memory[int(i)] for i in idxs]
+        return batch, idxs, weights
+
+    def update_priorities(self, idxs, new_p):
+        for i, p in zip(idxs.tolist(), new_p.tolist()):
+            self.prior[int(i)] = float(max(p, self.eps))
+
 
 class DQNAgent:
     def __init__(self, n_observation=None, n_action=None, optimizer_dict=None, lr=1e-3, gamma=0.95, epsilon=1.0,
-                 epsilon_decay=0.995, epsilon_min=0.01, memory_size=10000, batch_size=128, n_transitions_reinit = 2000, device='cpu', exp=None):
+                 epsilon_decay=0.995, epsilon_min=0.01, memory_size=10000, batch_size=128, n_transitions_reinit = 2000, per_alpha =  0.6, per_beta0 = 0.4, device='cpu', exp=None):
         self.n_observation = n_observation
         self.n_action = n_action
         self.gamma = gamma
@@ -55,8 +87,6 @@ class DQNAgent:
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
         self.batch_size = batch_size
-        self.replay_buffer = ReplayBuffer(memory_size)
-        self.replay_buffer_copy = None
         self.n_transitions_reinit = n_transitions_reinit
         self.steps_done = 0
         self.opt_count = 0
@@ -66,8 +96,14 @@ class DQNAgent:
         self.i2opt = {v: k for v, k in enumerate(optimizer_dict.keys())}
         uniq_params = list(set([x for xs in optimizer_dict.values() for x in xs]))
         self.i2params = {k: v for v, k in enumerate(uniq_params)}
-        self.huberloss = nn.HuberLoss()
+        self.huberloss = nn.HuberLoss(reduction='none')
         self.opt_step = 0
+
+        # PER
+        self.per_alpha = per_alpha
+        self.per_beta  = per_beta0
+        self.per_beta_inc = (1.0 - per_beta0) / 100000.0
+        self.replay_buffer = PrioritizedReplayBuffer(memory_size, alpha=per_alpha)
 
         self.device = device
         self.exp = exp
@@ -82,7 +118,6 @@ class DQNAgent:
 
         self.optimizer_opt = optim.Adam(self.model_optim.parameters(), lr=lr)
         self.optimizer_params = optim.Adam(self.model_params.parameters(), lr=lr)
-        self.loss_fn = nn.CrossEntropyLoss()
 
     def reinit_target(self):
         self.target_model_optim = DQN_optim(len(self.i2opt)).to(self.device)
@@ -118,139 +153,150 @@ class DQNAgent:
             model_reward=detach_item(transition.model_reward),
             opt_model_i=detach_item(transition.opt_model_i)
         )
+    
+    def push_memory(self, rl_params):
+        tr = self.detach_transition(Transition(*rl_params))
+        self.replay_buffer.push(
+            tr.state, tr.next_state, tr.action, tr.reward, tr.done, tr.model_reward, tr.opt_model_i
+        )
 
-    def deepcopy_replay_buffer_without_graph(self, buffer):
-        clean_buffer = ReplayBuffer(capacity=len(buffer.memory))
-        for transition in buffer.memory:
-            clean_buffer.push(*self.detach_transition(transition))
-        return clean_buffer
+    def _stack_state(self, st):
+    # dict {'loss_oper': Tensor[676], 'loss_bnd': Tensor[676]} -> Tensor[2,26,26]
+        x = torch.cat((st['loss_oper'], st['loss_bnd']), 0)
+        return x.view(2, 26, 26)
 
-    def optim_(self):
-        loss_arr_optim_class = []
-        loss_arr_param = []
+    def _get_param_act_idx(self, action_i, pname):
+        """
+        Унифицируем разные форматы action:
+        либо (optim_idx, {'epochs': idx, ...}), либо (optim_idx, epochs_idx, {param: idx})
+        """
+        if isinstance(action_i[1], dict):
+            return int(action_i[1][pname])
+        if pname == 'epochs':
+            return int(action_i[1])
+        return int(action_i[2][pname])
+
+    # def deepcopy_replay_buffer_without_graph(self, buffer):
+    #     clean_buffer = PrioritizedReplayBuffer(capacity=len(buffer.memory))
+    #     for transition in buffer.memory:
+    #         clean_buffer.push(*self.detach_transition(transition))
+    #     return clean_buffer
+    
+    def optim_(self, iters=1):
+        """
+        PER + Double DQN + Dueling.
+        За один вызов делает `iters` батч-обновлений из приоритезированного буфера.
+        Возвращает два списка средних лоссов (голова оптимизатора и суммарно по параметрам).
+        """
+        loss_arr_optim_class, loss_arr_param = [], []
+        all_rewards, all_dones = [], []
         model_reward_i_ar = []
-        all_rewards = []
-        all_dones = []
-        # self.replay_buffer_copy = deepcopy(self.replay_buffer)
-        self.replay_buffer_copy = self.deepcopy_replay_buffer_without_graph(self.replay_buffer)
 
-        transition_counter = 0  # счётчик обработанных переходов
+        self.transition_counter = 0
 
-        while len(self.replay_buffer_copy.memory) > 0:
+        for _ in range(iters):
+            if len(self.replay_buffer) < self.batch_size:
+                break
 
-            current_batch_size = min(self.batch_size, len(self.replay_buffer_copy.memory)) # на случай, если в буфере осталось меньше, чем batch_size
-            buff_test = self.replay_buffer_copy.sample(current_batch_size)
+            batch, idxs, is_w = self.replay_buffer.sample(self.batch_size, beta=self.per_beta, device=self.device)
+            self.per_beta = min(1.0, self.per_beta + self.per_beta_inc)
+            is_w = is_w.to(self.device)
 
-            transition_equal = lambda t1, t2: (
-                all(torch.equal(t1.state[k],      t2.state[k])      for k in t1.state) and
-                all(torch.equal(t1.next_state[k], t2.next_state[k]) for k in t1.next_state) and
-                t1.action        == t2.action and
-                t1.reward        == t2.reward and
-                t1.done          == t2.done and
-                t1.model_reward  == t2.model_reward and
-                t1.opt_model_i        == t2.opt_model_i
-            )
+            state, next_state, action, reward, done, model_reward, opt_model_i = zip(*batch)
+            B = len(batch)
 
-            self.replay_buffer_copy.memory = deque(
-                filter(
-                    lambda x: all(not transition_equal(x, y) for y in buff_test), self.replay_buffer_copy.memory
-                )
-            )
-
-            state, next_state, action, reward, done, model_reward, opt_model_i = zip(*buff_test)
-
-            # state = {'loss_total': tensor([...]), 'loss_oper': tensor([...]), 'loss_bnd': tensor([...])}
-            state = [torch.cat((elem['loss_oper'], elem['loss_bnd']), 0) for elem in state]
-            next_state = [torch.cat((elem['loss_oper'], elem['loss_bnd']), 0) for elem in next_state]
-            state = torch.stack(state, dim=0).reshape(-1, 2, 26, 26).to(self.device)
-            next_state = torch.stack(next_state, dim=0).reshape(-1, 2, 26, 26).to(self.device)
-            reward = torch.FloatTensor(reward).to(self.device)
-            done = torch.tensor(done, dtype=torch.int32, device=self.device)
+            state  = torch.stack([self._stack_state(s)  for s in state]).to(self.device)      # (B,2,26,26)
+            next_state = torch.stack([self._stack_state(s2) for s2 in next_state]).to(self.device)
+            reward   = torch.tensor(reward, dtype=torch.float, device=self.device)              # (B,)
+            done_raw = torch.tensor(done, dtype=torch.int8, device=self.device)    # сохраняем знак для метрик
+            done = (done_raw != 0).float()        
+            action_o = torch.tensor([a[0] for a in action], dtype=torch.long, device=self.device)
             model_reward = torch.FloatTensor(model_reward).to(self.device)
             opt_model_i = torch.IntTensor(opt_model_i).to(self.device)
 
-            liner_out_target, target_optim = self.target_model_optim(next_state)
-            liner_out_model, model_optim = self.model_optim(state)
+            # --- OPTIMIZER HEAD: Double DQN ---
+            flat, q_opt_cur = self.model_optim(state)                         # (B,A)
+            q_sa = q_opt_cur.gather(1, action_o.view(-1,1)).squeeze(1)          # (B,)
 
-            targets = lambda reward, done, target_res: \
-                    reward + (1 - abs(done)) * self.gamma * torch.max(target_res, dim=1).values
-            q_values = lambda model_res, action_: \
-                    model_res[torch.arange(current_batch_size), action_]
-            
             with torch.no_grad():
-                targets_optim = targets(reward, done, target_optim)
-            q_values_optim = q_values(model_optim, list(zip(*action))[0])
-            loss_opt = self.huberloss(input=q_values_optim, target=targets_optim)
-            loss_arr_optim_class.append(float(loss_opt))
+                _, q_opt_next_online = self.model_optim(next_state)               # (B,A)
+                a_next = q_opt_next_online.argmax(dim=1)                   # (B,)
+                _, q_opt_next_target = self.target_model_optim(next_state)        # (B,A)
+                q_next = q_opt_next_target.gather(1, a_next.view(-1,1)).squeeze(1)
+                y_opt  = reward + (1.0 - done) * self.gamma * q_next
 
-            # self.optimizer_opt.zero_grad()
-            # loss.backward()
-            # self.optimizer_opt.step()
+            td_opt_abs = (q_sa - y_opt).abs().detach()
+            # loss_opt = (nn.functional.huber_loss(q_sa, y_opt, reduction='none') * is_w).mean()
+            loss_opt = (self.huberloss(input=q_sa, target=y_opt) * is_w).mean()
 
-            action_clases = [self.i2opt[el] for el in list(zip(*action))[0]]
+            # --- PARAM HEADS: Double per-parameter ---
+            opt_names = [self.i2opt[int(i.item())] for i in action_o]
+            q_params_cur = self.model_params(flat, opt_names)
+            with torch.no_grad():
+                q_params_next_on = self.model_params(next_state, opt_names)
+                q_params_next_tg = self.target_model_params(next_state, opt_names)
 
-            liner_out_target = liner_out_target.detach()
-            # liner_out_target.requires_grad = True
-            # liner_out_model = liner_out_model.detach()
-            # liner_out_model.requires_grad = True
+            loss_param_items, td_param_items = [], []
+            for i in range(B):
+                lp_sum = torch.tensor(0.0, device=self.device)
+                td_sum = 0.0
+                for pname in self.optimizer_dict[opt_names[i]]:
+                    act_idx = self._get_param_act_idx(action[i], pname)
+                    q_curr  = q_params_cur[i][pname][act_idx]
 
-            target_params = self.target_model_params(liner_out_target, action_clases)
-            model_params = self.model_params(liner_out_model, action_clases)
-            # q_values_optim_ar = []
-            # targets_optim_ar = []
-            # for i, optim_name in enumerate(action_clases):
-            #     for param_name in self.optimizer_dict[optim_name].keys():
-            #         q_values_optim_ar.append(targets(reward[i], done[i], target_params[i][param_name].reshape(1,-1)))
-            #         action_ = action[i][1][param_name]
-            #         q_values_dist = model_params[i][param_name]
-            #         targets_optim_ar.append(q_values_dist[action_])
+                    q_next_on  = q_params_next_on[i][pname]         # (n_choices,)
+                    a_next_p   = int(q_next_on.argmax().item())
+                    q_next_tg  = q_params_next_tg[i][pname][a_next_p]
+                    y_p = reward[i] + (1.0 - done[i]) * self.gamma * q_next_tg
 
-            q_pred_list, target_list = [], []
-            for i, optim_name in enumerate(action_clases):
-                for param_name in self.optimizer_dict[optim_name]:
-                    act_idx = action[i][1][param_name]
-                    # предсказание
-                    q_pred_list.append(model_params[i][param_name][act_idx])
+                    # lp = nn.functional.huber_loss(q_curr, y_p, reduction='none') * is_w[i]
+                    lp = self.huberloss(input=q_curr, target=y_p) * is_w[i]
+                    lp_sum = lp_sum + lp
+                    td_sum += float((q_curr - y_p).abs().item())
+                loss_param_items.append(lp_sum)
+                td_param_items.append(td_sum)
 
-                    # TD-таргет без града
-                    with torch.no_grad():
-                        target_list.append(
-                            targets(reward[i], done[i].float(),
-                                    target_params[i][param_name].reshape(1, -1)).squeeze(0)
-                        )
+            loss_param = torch.stack(loss_param_items).mean()
 
-            # for key in 
-            # loss = (q_values - targets) ** 2
-            loss_param = self.huberloss(torch.stack(q_pred_list),
-                            torch.stack(target_list))
-            
-            loss_arr_param.append(float(loss_param))
-            # loss = loss.type(torch.DoubleTensor)
-            # loss = torch.mean(loss)
-            
+            # --- шаг оптимизации ---
             self.optimizer_opt.zero_grad()
             self.optimizer_params.zero_grad()
             (loss_opt + loss_param).backward()
+            torch.nn.utils.clip_grad_norm_(self.model_optim.parameters(), 10.0)
+            torch.nn.utils.clip_grad_norm_(self.model_params.parameters(), 10.0)
             self.optimizer_opt.step()
             self.optimizer_params.step()
+
+            # --- апдейт приоритетов PER ---
+            with torch.no_grad():
+                new_priors = td_opt_abs + torch.tensor(td_param_items, device=self.device)
+            self.replay_buffer.update_priorities(idxs, new_priors.cpu())
+
+            # --- периодическое обновление таргет-сетей (как у тебя) ---
+            print("\nRL optimization is complete!\n")
+            self.transition_counter += self.batch_size
+            
+
+            # периодическая реинициализация таргет-сетей (как у тебя)
+            if self.transition_counter >= self.n_transitions_reinit:
+                print("REINIT TARGET")
+                self.reinit_target()
+                self.transition_counter = 0
+
+            loss_arr_optim_class.append(float(loss_opt.item()))
+            loss_arr_param.append(float(loss_param.item()))
 
             print(f"Loss for params: {loss_param}")
             print(f"Loss for optim: {loss_opt}")
             print(f"Loss for both: {loss_opt + loss_param}")
 
             all_rewards.append(reward.detach().cpu())
-            all_dones.append(done.detach().cpu())
+            all_dones.append(done_raw.detach().cpu())
 
             model_reward_i_ar += model_reward[(opt_model_i == self.opt_step).nonzero()].reshape(-1).tolist()
-            
-            print("\nRL optimization is complete!\n")
-            transition_counter += current_batch_size  # <--- прибавляем размер батча
 
-            # Условие обновления таргетной сети
-            if transition_counter >= self.n_transitions_reinit:
-                print("REINIT TARGET")
-                self.reinit_target()
-                transition_counter = 0  # сбрасываем счётчик
+
+        self.opt_step += 1
 
         reward_tensor = torch.cat(all_rewards)
         done_tensor = torch.cat(all_dones)
@@ -287,8 +333,6 @@ class DQNAgent:
         #     for el in loss_arr_param:
         #         mean_batch_loss_param += el
         #     mean_batch_loss_param = mean_batch_loss_param / len(loss_arr_param)
-
-        self.opt_step += 1
         if model_reward_i_ar == []: model_reward_i_ar = [0]
         bad_action = [el for el in model_reward_i_ar if el <= 0]
 
@@ -311,6 +355,8 @@ class DQNAgent:
             self.exp.log_metric("bad_action_procent", len(bad_action)/len(model_reward_i_ar), step=self.steps_done)
             self.exp.log_metric("count_good_end", count_good_end, step=self.steps_done)
             self.exp.log_metric("count_bad_end", count_bad_end, step=self.steps_done)
+            # Логируем список приоритетов
+            self.exp.log_parameter('priority', self.replay_buffer.prior)
 
 
 
@@ -344,16 +390,8 @@ class DQNAgent:
             self.exp.log_other("model_snapshot_step", self.steps_done)
 
 
-        # self.replay_buffer.memory = deque(filter(lambda x: x not in set(buff_test), self.replay_buffer.memory),
-        #                                   maxlen=self.replay_buffer.memory.maxlen)
-       
-
-        # self.opt_count += 1
-        # self.opt_count_out += 1
-        # if self.opt_count == self.opt_count_for_reinit:
-        #     self.reinit_target()
-        #     self.opt_count = 0
         return loss_arr_optim_class, loss_arr_param
+
     
     def post_proc_model(self, optim_class, epochs_class, param_class):
         class_name = self.i2opt[optim_class]
@@ -386,7 +424,7 @@ class DQNAgent:
     def select_action(self, state):
         with torch.no_grad():
             # state = state['loss_total'].to(self.device)
-            state = torch.cat((state['loss_oper'], state['loss_bnd']), 0)
+            state = torch.cat((state['loss_oper'], state['loss_bnd']), 0).to(self.device)
             sample = random.random()
             eps_threshold = EPS_END + (EPS_START - EPS_END) * \
                             math.exp(-1. * self.steps_done / EPS_DECAY)
@@ -402,21 +440,17 @@ class DQNAgent:
                     # x_optim, x_loss, x_epochs = self.model(state)
                     # x_optim, x_loss, x_epochs = torch.argmax(x_optim), torch.argmax(x_loss), torch.argmax(x_epochs)
                     liner_out, x = self.model_optim(state)
-                    optim_class = int(torch.argmax(x))
+                    optim_class = int(torch.argmax(x).item())
                     optim_class_name = self.i2opt[optim_class]
                     param_class = {}
                     param_dict = self.model_params(liner_out, [optim_class_name])[0]
                     for key in param_dict:
-                        if key == 'epochs': epochs_class = torch.argmax(param_dict[key])
-                        else: param_class[key] = torch.argmax(param_dict[key])
+                        if key == 'epochs': epochs_class = torch.argmax(param_dict[key]).item()
+                        else: param_class[key] = torch.argmax(param_dict[key]).item()
             else:
                 optim_class, epochs_class, param_class = self.get_random_action()
             action = self.post_proc_model(int(optim_class), epochs_class, param_class)
             return action, (int(optim_class), epochs_class, param_class), sample > eps_threshold
-
-    def push_memory(self, rl_params):
-        # self.replay_buffer.memory += (rl_params,)
-        self.replay_buffer.push(*rl_params)
 
     def render_Q_function(self):            
         
