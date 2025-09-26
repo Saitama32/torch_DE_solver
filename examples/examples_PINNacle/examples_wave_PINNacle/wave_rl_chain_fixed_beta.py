@@ -128,6 +128,12 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         torch.nn.Linear(neurons, pde_dim_out)
     )
 
+    if torch.cuda.device_count() > 1:
+        print("Использую", torch.cuda.device_count(), "GPU!")
+        net = torch.nn.DataParallel(net)
+
+    net = net.cuda()
+
     grid_test = torch.cartesian_prod(torch.linspace(0, 1, 100), torch.linspace(0, 1, 100))
     model = Model(net, domain, equation, boundaries)
     model_layers = [pde_dim_in, neurons, neurons, neurons, pde_dim_out]
