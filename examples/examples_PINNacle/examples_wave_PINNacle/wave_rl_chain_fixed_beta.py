@@ -38,7 +38,7 @@ experiment.log_parameters({
     "description": "farm_transitions_Burgers_1d_basic_RL_optimizer"
 })
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "cuda" if torch.cuda.is_available() else "cpu"
 solver_device(device)
 
 base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
