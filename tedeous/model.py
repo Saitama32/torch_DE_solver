@@ -347,8 +347,8 @@ class Model():
                                 n_transitions_reinit = rl_agent_params["n_transitions_reinit"],
                                 exp = rl_agent_params["exp"])
             
-            rl_agent.model_optim.load_state_dict(torch.load(r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\new_agent_strategy\models\model_optim_step_129-129.pt'))
-            rl_agent.model_params.load_state_dict(torch.load(r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\new_agent_strategy\models\model_params_step_129-129.pt'))
+            # rl_agent.model_optim.load_state_dict(torch.load(r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\new_agent_strategy\models\model_optim_step_129-129.pt'))
+            # rl_agent.model_params.load_state_dict(torch.load(r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\new_agent_strategy\models\model_params_step_129-129.pt'))
 
             state_shape = get_state_shape(loss_surface_params)
 
@@ -361,8 +361,6 @@ class Model():
             idx_traj = 0
             n_steps = 0
             n_steps_max = 1512
-            bufer_start_i = 128#128
-            n_steps_for_optim = 128 # n steps optimize
 
             grid = self.domain.build('NN').to(device_type())
             variable_dict = self.domain.variable_dict
@@ -478,7 +476,8 @@ class Model():
                     #     'params': {'lr': optimizers['params'][i_loss]},
                     #     'epochs': optimizers['epochs'][i_epochs]
                     # }
-
+                    if action['type'] == "LBFGS":
+                        action['params']['line_search_fn'] = 'strong_wolfe'
                     optimizer = Optimizer(action['type'], action['params'])
                     self.optimizer = optimizer.optimizer_choice(self.mode, self.net)
                     closure = Closure(mixed_precision, self).get_closure(optimizer.optimizer)
