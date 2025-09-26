@@ -15,7 +15,7 @@ epochs=10
 betas=(5)
 devices=(0)
 proj=wave_pso_parameters
-max_parallel_jobs=3
+max_parallel_jobs=2
 
 background_pids=()
 current_device=0
