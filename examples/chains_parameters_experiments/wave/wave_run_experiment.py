@@ -179,8 +179,9 @@ def wave_1d_basic_experiment(experiment_args):
                                          randomize_parameter=1e-6,
                                          info_string_every=1)
     opt_type = experiment_args["opt"]
-    opt_params = experiment_args["opt_params"]
+    opt_params = parse_params(experiment_args["opt_params"])
     epochs = experiment_args["epochs"]
+
     optim = Optimizer(opt_type, opt_params)
     model.train(optim, epochs, save_model=False, callbacks=[cb_es], info_string_every=20)
     x = torch.linspace(0, 1, x_res)    # сетка по x

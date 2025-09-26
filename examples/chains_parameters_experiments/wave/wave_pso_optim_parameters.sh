@@ -14,7 +14,7 @@ pop_size=(20 30 40)
 epochs=1500
 betas=(5)
 devices=(0)
-proj=wave_adam_final
+proj=wave_pso_parameters
 max_parallel_jobs=5
 
 background_pids=()
