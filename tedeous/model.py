@@ -1,4 +1,4 @@
-import torch
+import torch, gc
 import numpy as np
 import torch.nn.init as init
 import torch.nn as nn
@@ -21,6 +21,7 @@ from tedeous.device import device_type
 from tedeous.rl_algorithms import DQNAgent, PrioritizedReplayBuffer, Transition
 from tedeous.rl_environment import EnvRLOptimizer
 import os
+
 
 # import random, math
 # torch.manual_seed(1438)
@@ -459,6 +460,8 @@ class Model():
                       'with a new initial point.')
 
                 for i in itertools.count():
+                    gc.collect()
+                    torch.cuda.empty_cache()
                     # state = torch.stack((state['loss_oper'], state['loss_bnd']), dim=0)
                     n_steps += 1
                     action, action_raw, is_model = rl_agent.select_action(state)
