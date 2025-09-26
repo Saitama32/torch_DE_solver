@@ -37,7 +37,7 @@ def set_random_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "cuda" if torch.cuda.is_available() else "cpu"
 solver_device(device)
 
 base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
