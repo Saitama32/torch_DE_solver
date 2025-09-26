@@ -11,11 +11,11 @@ num_res=10000
 opt=PSO
 lrs=(0.0001 0.001 0.0)
 pop_size=(20 30 40)
-epochs=15
+epochs=10
 betas=(5)
 devices=(0)
 proj=wave_pso_parameters
-max_parallel_jobs=5
+max_parallel_jobs=3
 
 background_pids=()
 current_device=0
