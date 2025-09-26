@@ -3,14 +3,14 @@
 pde=wave
 seeds=(123 234 345 456 567)
 losses=(mse)
-n_neurons=(200 400)
+n_neurons=(100 200 400)
 n_layers=4
 num_x=257
 num_t=101
 num_res=10000
 opt=adam
 lrs=(0.0001 0.001 0.01)
-epochs=41000
+epochs=15000
 betas=(5)
 devices=(0)
 proj=wave_adam_final
@@ -47,7 +47,7 @@ do
                         device=${devices[current_device]}
                         current_device=$(( (current_device + 1) % ${#devices[@]} ))
 
-                        python run_experiment.py --seed $seed --pde $pde --pde_params beta $beta --opt $opt \
+                        python wave_run_experiment.py --seed $seed --pde $pde --pde_params beta $beta --opt $opt \
                             --opt_params lr $lr --num_layers $n_layers --num_neurons $n_neuron \
                             --loss $loss --num_x $num_x --num_t $num_t --num_res $num_res --epochs $epochs --wandb_project $proj \
                             --device $device &

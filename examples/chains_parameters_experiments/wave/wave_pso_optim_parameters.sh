@@ -3,7 +3,7 @@
 pde=wave
 seeds=(123 234 345 456 567)
 losses=(mse)
-n_neurons=(200 400)
+n_neurons=(100 200 400)
 n_layers=4
 num_x=257
 num_t=101
@@ -50,7 +50,7 @@ do
                             device=${devices[current_device]}
                             current_device=$(( (current_device + 1) % ${#devices[@]} ))
 
-                            python run_experiment.py \
+                            python wave_run_experiment.py \
                                 --seed $seed \
                                 --pde $pde \
                                 --pde_params beta $beta \
