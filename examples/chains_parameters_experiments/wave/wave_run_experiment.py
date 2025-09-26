@@ -156,6 +156,7 @@ def wave_1d_basic_experiment(experiment_args):
     layers.append(torch.nn.Linear(neurons, pde_dim_out))
 
     net = torch.nn.Sequential(*layers)
+    net.to(device)
 
 
     grid_test = torch.cartesian_prod(torch.linspace(0, 1, 100), torch.linspace(0, 1, 100))
@@ -187,7 +188,7 @@ def wave_1d_basic_experiment(experiment_args):
     x = torch.linspace(0, 1, x_res)    # сетка по x
 
     grid = torch.cartesian_prod(torch.linspace(0, 1, x_res), torch.linspace(0, 1, t_res))
-
+    
     error_rmse_train = torch.sqrt(torch.mean((exact_func(grid).reshape(-1, 1) - net(grid)) ** 2))
     error_l2re_train = torch.sqrt(torch.sum(
         (exact_func(grid).reshape(-1, 1) - net(grid)) ** 2) / torch.sum(exact_func(grid).reshape(-1, 1) ** 2))

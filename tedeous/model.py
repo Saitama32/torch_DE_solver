@@ -84,7 +84,7 @@ class Model():
         if os.path.exists(folder_path) and os.path.isdir(folder_path):
             pass
         else:
-            os.makedirs(folder_path)
+            os.makedirs(folder_path, exist_ok=True)
         self._save_dir = folder_path
         self.batch_size = batch_size
 
