@@ -200,11 +200,12 @@ def wave_1d_basic_experiment(experiment_args):
     print(f"Test RMSE: {error_rmse_test}, L2RE: {error_l2re_test}")
     
     experiment_args["experiment"].log_parameters({
-        "error_rmse_train", error_rmse_train.item(),
-        "error_l2re_train", error_l2re_train.item(),
-        "error_rmse_test", error_rmse_test.item(),
-        "error_l2re_test", error_l2re_test.item()
+    "error_rmse_train": error_rmse_train.item(),
+    "error_l2re_train": error_l2re_train.item(),
+    "error_rmse_test": error_rmse_test.item(),
+    "error_l2re_test": error_l2re_test.item()
     })
+
 
 
 
