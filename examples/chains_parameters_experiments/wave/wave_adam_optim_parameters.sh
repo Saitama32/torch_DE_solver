@@ -49,7 +49,7 @@ do
 
                         python wave_run_experiment.py --seed $seed --pde $pde --pde_params beta $beta --opt $opt \
                             --opt_params lr $lr --num_layers $n_layers --num_neurons $n_neuron \
-                            --loss $loss --num_x $num_x --num_t $num_t --num_res $num_res --epochs $epochs --wandb_project $proj \
+                            --loss $loss --num_x $num_x --num_t $num_t --num_res $num_res --epochs $epochs --comet_project $proj \
                             --device $device &
 
                         background_pids+=($!)

@@ -63,7 +63,7 @@ do
                                 --num_t $num_t \
                                 --num_res $num_res \
                                 --epochs $epochs \
-                                --wandb_project $proj \
+                                --comet_project $proj \
                                 --device $device &
 
                             background_pids+=($!)
