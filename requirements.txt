@@ -17,3 +17,4 @@ SALib
 geoopt
 #git+https://github.com/uwjunqi/Pytorch-Tensor-Train-Network.git
 wandb
+comet_ml
