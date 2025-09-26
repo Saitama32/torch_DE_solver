@@ -169,7 +169,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         },
         'LBFGS':{
             'lr':[1, 5e-1, 1e-1],
-            'epochs':[100, 1500, 1000]
+            'epochs':[100, 500, 1500]
         },
         'PSO':{
             'lr':[0.0, 1e-3, 1e-4],
