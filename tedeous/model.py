@@ -470,7 +470,7 @@ class Model():
                         optim_class = 2
                         class_name = rl_agent.i2opt[optim_class]
                         param_class = {}
-                        optim_class_dict = self.optimizer_dict[class_name]
+                        optim_class_dict = rl_agent.optimizer_dict[class_name]
 
                         for key in optim_class_dict:
                             if key == 'epochs': epochs_class = 0
