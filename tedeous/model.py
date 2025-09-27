@@ -477,7 +477,7 @@ class Model():
                             else:
                                 param_class[key] = 0
                         action = rl_agent.post_proc_model(optim_class, epochs_class, param_class)
-                        action_raw = (int(2), 0, 0)
+                        action_raw = (optim_class, epochs_class, param_class)
                         action_raw[2]['epochs'] = action_raw[1]
                         action_raw = (action_raw[0], action_raw[2])
 
