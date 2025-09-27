@@ -152,7 +152,9 @@ class Solution():
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: loss
         """
-        self.op = self.operator.operator_compute(create_graph=create_graph)
+        self.operator.create_graph = create_graph
+        self.boundary.operator.create_graph = create_graph
+        self.op = self.operator.operator_compute()
         self.bval, self.true_bval,\
             self.bval_keys, self.bval_length = self.boundary.apply_bcs()
         dtype = self.op.dtype

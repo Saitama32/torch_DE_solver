@@ -90,7 +90,7 @@ class Derivative_autograd(DerivativeInt):
                 in corresponding axis.
         """
 
-            # Если граф не нужен (например, PSO без градиента) → сразу вернуть нули
+        # Если граф не нужен (например, PSO без градиента) → сразу вернуть нули
         if not create_graph:
             return torch.zeros((points.shape[0], 1), device=points.device, dtype=points.dtype)
 

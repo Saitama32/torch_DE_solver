@@ -130,6 +130,7 @@ class Operator():
             torch.cuda.empty_cache()
             self.init_mini_batches()
             self.current_batch_i = 0
+        self.create_graph = True
         self.derivative = Derivative(self.model,
                                 self.derivative_points).set_strategy(self.mode).take_derivative
 
@@ -142,8 +143,7 @@ class Operator():
 
     def apply_operator(self,
                        operator: list,
-                       grid_points: Union[torch.Tensor, None],
-                       create_graph: bool = True) -> torch.Tensor:
+                       grid_points: Union[torch.Tensor, None]) -> torch.Tensor:
         """ Deciphers equation in a single grid subset to a field.
 
         Args:
@@ -155,17 +155,16 @@ class Operator():
         Returns:
             total (torch.Tensor): Decoded operator on a single grid subset.
         """
-
         for term in operator:
             term = operator[term]
-            dif = self.derivative(term, grid_points, create_graph=create_graph)
+            dif = self.derivative(term, grid_points, create_graph=self.create_graph)
             try:
                 total += dif
             except NameError:
                 total = dif
         return total
 
-    def _pde_compute(self, create_graph) -> torch.Tensor:
+    def _pde_compute(self) -> torch.Tensor:
         """ Computes PDE residual.
 
         Returns:
@@ -184,7 +183,7 @@ class Operator():
         num_of_eq = len(self.prepared_operator)
         if num_of_eq == 1:
             op = self.apply_operator(
-                self.prepared_operator[0], sorted_grid, create_graph=create_graph).reshape(-1,1)
+                self.prepared_operator[0], sorted_grid).reshape(-1,1)
         else:
             op_list = []
             for i in range(num_of_eq):
@@ -221,7 +220,7 @@ class Operator():
         else:
             return torch.cat(sol_list).reshape(1,-1)
 
-    def operator_compute(self, create_graph: bool = True) -> torch.Tensor:
+    def operator_compute(self) -> torch.Tensor:
         """ Corresponding to form (weak or strong) calculate residual of operator.
 
         Returns:
@@ -229,7 +228,7 @@ class Operator():
         """
         
         if self.weak_form is None or self.weak_form == []:
-            return self._pde_compute(create_graph=create_graph)
+            return self._pde_compute()
         else:
             return self._weak_pde_compute()
 
@@ -263,6 +262,7 @@ class Bounds():
         self.operator = Operator(self.grid, self.prepared_bconds,
                                        self.model, self.mode, weak_form,
                                        derivative_points)
+        self.operator.create_graph = True
 
     def _apply_bconds_set(self, operator_set: list) -> torch.Tensor:
         """ Method only for *NN* mode. Calculate boundary conditions with derivatives
