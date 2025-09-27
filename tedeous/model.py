@@ -511,26 +511,23 @@ class Model():
                         print(f"Current number of solver models: {len(solver_models)}. "
                               f"\nRight number = {rl_agent_params['n_save_models']}")
 
-                    net = self.net.to(device_type())
+                    with torch.no_grad():
+                        net = self.net.to(device_type())
+                        if callable(rl_agent_params["exact_solution"]):
+                            operator_rmse = torch.sqrt(
+                                torch.mean((rl_agent_params["exact_solution"](grid).reshape(-1, 1) - net(grid)) ** 2)
+                            )
+                        else:
+                            exact = exact_solution_data(...)
+                            operator_rmse = torch.sqrt(torch.mean((exact.reshape(-1, 1) - net(grid)) ** 2))
 
-                    if callable(rl_agent_params["exact_solution"]):
-                        operator_rmse = torch.sqrt(
-                            torch.mean((rl_agent_params["exact_solution"](grid).reshape(-1, 1) - net(grid)) ** 2)
-                        )
-                    else:
-                        exact = exact_solution_data(grid, rl_agent_params["exact_solution"],
-                                                    equation_params[-1][0], equation_params[-1][-1],
-                                                    t_dim_flag='t' in list(self.domain.variable_dict.keys()))
-                        net_predicted = net(grid)
-                        operator_rmse = torch.sqrt(torch.mean((exact.reshape(-1, 1) - net_predicted) ** 2))
-
-                    boundary_rmse = torch.sum(torch.stack([
-                        torch.sqrt(torch.mean(
-                            (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
-                        ))
-                        for b in bconds
-                    ]))
-                    
+                        boundary_rmse = torch.sum(torch.stack([
+                            torch.sqrt(torch.mean(
+                                (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
+                            ))
+                            for b in bconds
+                        ]))
+                                        
                     print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
 
                     env.solver_models = solver_models

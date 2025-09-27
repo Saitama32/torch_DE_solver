@@ -13,7 +13,7 @@ class PSO(torch.optim.Optimizer):
 
     def __init__(self,
                  params,
-                 pop_size: int = 20,
+                 pop_size: int = 30,
                  b: float = 0.9,
                  c1: float = 8e-2,
                  c2: float = 5e-1,
@@ -116,7 +116,7 @@ class PSO(torch.optim.Optimizer):
             -self.variance, self.variance).to(device_type())
         swarm = matrix + variance
         swarm[0] = matrix[0]
-        return swarm.clone().detach().requires_grad_(True)
+        return swarm.clone().detach()
 
     def update_pso_params(self) -> None:
         """Method for updating pso parameters if c_decrease=True.
