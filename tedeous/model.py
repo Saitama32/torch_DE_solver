@@ -1,4 +1,4 @@
-import torch, gc
+import torch
 import numpy as np
 import torch.nn.init as init
 import torch.nn as nn
@@ -460,13 +460,18 @@ class Model():
                       'with a new initial point.')
 
                 for i in itertools.count():
-                    gc.collect()
-                    torch.cuda.empty_cache()
                     # state = torch.stack((state['loss_oper'], state['loss_bnd']), dim=0)
                     n_steps += 1
                     action, action_raw, is_model = rl_agent.select_action(state)
                     action_raw[2]['epochs'] = action_raw[1]
                     action_raw = (action_raw[0], action_raw[2])
+
+                    if n_steps == 1: # На самом первом шаге выбираем PSO
+                        action = rl_agent.post_proc_model(int(2), 0, 0)
+                        action_raw = (int(2), 0, 0)
+                        action_raw[2]['epochs'] = action_raw[1]
+                        action_raw = (action_raw[0], action_raw[2])
+
                     # action_raw = tupe_dqn_class[dqn_class]
                     if is_model:
                         print("Action by model")
@@ -511,23 +516,26 @@ class Model():
                         print(f"Current number of solver models: {len(solver_models)}. "
                               f"\nRight number = {rl_agent_params['n_save_models']}")
 
-                    with torch.no_grad():
-                        net = self.net.to(device_type())
-                        if callable(rl_agent_params["exact_solution"]):
-                            operator_rmse = torch.sqrt(
-                                torch.mean((rl_agent_params["exact_solution"](grid).reshape(-1, 1) - net(grid)) ** 2)
-                            )
-                        else:
-                            exact = exact_solution_data(...)
-                            operator_rmse = torch.sqrt(torch.mean((exact.reshape(-1, 1) - net(grid)) ** 2))
+                    net = self.net.to(device_type())
 
-                        boundary_rmse = torch.sum(torch.stack([
-                            torch.sqrt(torch.mean(
-                                (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
-                            ))
-                            for b in bconds
-                        ]))
-                                        
+                    if callable(rl_agent_params["exact_solution"]):
+                        operator_rmse = torch.sqrt(
+                            torch.mean((rl_agent_params["exact_solution"](grid).reshape(-1, 1) - net(grid)) ** 2)
+                        )
+                    else:
+                        exact = exact_solution_data(grid, rl_agent_params["exact_solution"],
+                                                    equation_params[-1][0], equation_params[-1][-1],
+                                                    t_dim_flag='t' in list(self.domain.variable_dict.keys()))
+                        net_predicted = net(grid)
+                        operator_rmse = torch.sqrt(torch.mean((exact.reshape(-1, 1) - net_predicted) ** 2))
+
+                    boundary_rmse = torch.sum(torch.stack([
+                        torch.sqrt(torch.mean(
+                            (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
+                        ))
+                        for b in bconds
+                    ]))
+                    
                     print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
 
                     env.solver_models = solver_models

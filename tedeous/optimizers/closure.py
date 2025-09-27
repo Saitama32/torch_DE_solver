@@ -1,5 +1,6 @@
 import torch
 from tedeous.device import device_type
+import contextlib
 
 
 class Closure():
@@ -64,36 +65,48 @@ class Closure():
         return loss
 
     def _closure_pso(self):
-        def loss_grads():
-            self.optimizer.zero_grad()
-            with torch.autocast(device_type=self.device,
-                                dtype=self.dtype,
-                                enabled=self.mixed_precision):
-                loss, loss_normalized = self.model.solution_cls.evaluate()
+        def loss_grads(use_grad: bool):
+            # градиенты не нужны? выключаем граф и AMP-скалер на backward
+            ctx_no_grad = torch.no_grad() if not use_grad else contextlib.nullcontext()
+            with ctx_no_grad:
+                with torch.autocast(device_type=self.device,
+                                    dtype=self.dtype,
+                                    enabled=self.mixed_precision):
+                    # ключ: не строим второй порядок графа в PSO-без-градиента
+                    loss, loss_normalized = self.model.solution_cls.evaluate(create_graph=use_grad)
 
-            if self.optimizer.use_grad:
-                grads = self.optimizer.gradient(loss)
+            if use_grad:
+                grads = self.optimizer.gradient(loss)  # create_graph здесь не нужен
                 grads = torch.where(grads != grads, torch.zeros_like(grads), grads)
             else:
-                grads = torch.tensor([0.])
+                grads = None  # заглушка; форму создадим позже
 
-            return loss, grads
+            # не держим граф между частицами
+            return loss.detach(), grads
 
         loss_swarm = []
         grads_swarm = []
+        device = self.optimizer.swarm.device
+
         for particle in self.optimizer.swarm:
             self.optimizer.vec_to_params(particle)
-            loss_particle, grads = loss_grads()
-            loss_swarm.append(loss_particle)
-            grads_swarm.append(grads.reshape(1, -1))
+            loss_particle, grads = loss_grads(self.optimizer.use_grad)
+            loss_swarm.append(loss_particle)  # уже detach()
+            if self.optimizer.use_grad:
+                grads_swarm.append(grads.reshape(1, -1))
 
-        losses = torch.stack(loss_swarm).reshape(-1)
+        losses = torch.stack(loss_swarm, dim=0).reshape(-1)
 
-        gradients = torch.vstack(grads_swarm)
+        if self.optimizer.use_grad:
+            gradients = torch.vstack(grads_swarm)
+        else:
+            # нулевая матрица нужной формы для совместимости
+            gradients = torch.zeros((self.optimizer.pop_size, self.optimizer.vec_shape), device=device)
 
-        self.model.cur_loss = min(loss_swarm)
+        self.model.cur_loss = torch.min(losses)
 
         return losses, gradients
+
 
     def _closure_ngd(self):
         self.optimizer.zero_grad()
