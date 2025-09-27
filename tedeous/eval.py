@@ -142,7 +142,8 @@ class Operator():
 
     def apply_operator(self,
                        operator: list,
-                       grid_points: Union[torch.Tensor, None]) -> torch.Tensor:
+                       grid_points: Union[torch.Tensor, None],
+                       create_graph: bool = True) -> torch.Tensor:
         """ Deciphers equation in a single grid subset to a field.
 
         Args:
@@ -157,14 +158,14 @@ class Operator():
 
         for term in operator:
             term = operator[term]
-            dif = self.derivative(term, grid_points)
+            dif = self.derivative(term, grid_points, create_graph=create_graph)
             try:
                 total += dif
             except NameError:
                 total = dif
         return total
 
-    def _pde_compute(self) -> torch.Tensor:
+    def _pde_compute(self, create_graph) -> torch.Tensor:
         """ Computes PDE residual.
 
         Returns:
@@ -183,7 +184,7 @@ class Operator():
         num_of_eq = len(self.prepared_operator)
         if num_of_eq == 1:
             op = self.apply_operator(
-                self.prepared_operator[0], sorted_grid).reshape(-1,1)
+                self.prepared_operator[0], sorted_grid, create_graph=create_graph).reshape(-1,1)
         else:
             op_list = []
             for i in range(num_of_eq):
@@ -220,14 +221,15 @@ class Operator():
         else:
             return torch.cat(sol_list).reshape(1,-1)
 
-    def operator_compute(self):
+    def operator_compute(self, create_graph: bool = True) -> torch.Tensor:
         """ Corresponding to form (weak or strong) calculate residual of operator.
 
         Returns:
             torch.Tensor: operator residual.
         """
+        
         if self.weak_form is None or self.weak_form == []:
-            return self._pde_compute()
+            return self._pde_compute(create_graph=create_graph)
         else:
             return self._weak_pde_compute()
 

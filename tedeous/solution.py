@@ -136,7 +136,8 @@ class Solution():
         )
 
     def evaluate(self,
-                 save_graph: bool = True) -> Tuple[torch.Tensor, torch.Tensor]:
+                 save_graph: bool = True,
+                 create_graph: bool = True) -> Tuple[torch.Tensor, torch.Tensor]:
         """ Computes loss.
 
         Args:
@@ -151,7 +152,7 @@ class Solution():
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: loss
         """
-        self.op = self.operator.operator_compute()
+        self.op = self.operator.operator_compute(create_graph=create_graph)
         self.bval, self.true_bval,\
             self.bval_keys, self.bval_length = self.boundary.apply_bcs()
         dtype = self.op.dtype
