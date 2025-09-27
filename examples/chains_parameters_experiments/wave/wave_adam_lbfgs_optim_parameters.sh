@@ -16,7 +16,7 @@ epochs_LBFGS=2050
 betas=(5)
 devices=(0)
 proj=wave_adam_lbfgs_parameters_full_rmse
-max_parallel_jobs=5
+max_parallel_jobs=3
 
 background_pids=()
 current_device=0
@@ -43,30 +43,37 @@ do
         do
             for beta in "${betas[@]}"
             do
-                for lr in "${lrs[@]}"
+                for hsize in "${history_size[@]}"
                 do
-                    if [ $interrupted -eq 0 ]; then  # Check if Ctrl+C has been pressed
-                        device=${devices[current_device]}
-                        current_device=$(( (current_device + 1) % ${#devices[@]} ))
+                    for lr in "${lrs[@]}"
+                    do
+                        if [ $interrupted -eq 0 ]; then
+                            device=${devices[current_device]}
+                            current_device=$(( (current_device + 1) % ${#devices[@]} ))
+                            echo "Running: seed=$seed loss=$loss n_neuron=$n_neuron beta=$beta lr=$lr hsize=$hsize"
 
-                        python wave_run_experiment.py --seed $seed --pde $pde --pde_params beta $beta --opt Adam LBFGS \
-                            --opt_params_Adam lr $lr --opt_params_LBFGS history_size $history_size --num_layers $n_layers --num_neurons $n_neuron \
-                            --loss $loss --num_x $num_x --num_t $num_t --num_res $num_res --epochs_Adam $epochs_Adam --epochs_LBFGS $epochs_LBFGS  --comet_project $proj \
-                            --device $device &
+                            python wave_run_experiment.py --seed $seed --pde $pde --pde_params beta $beta \
+                                --opt Adam LBFGS \
+                                --opt_params_Adam lr $lr \
+                                --opt_params_LBFGS history_size $hsize \
+                                --num_layers $n_layers --num_neurons $n_neuron \
+                                --loss $loss --num_x $num_x --num_t $num_t --num_res $num_res \
+                                --epochs_Adam $epochs_Adam --epochs_LBFGS $epochs_LBFGS \
+                                --comet_project $proj --device $device &
 
-                        background_pids+=($!)
-
-                        # Limit the number of parallel jobs
-                        while [ $(jobs | wc -l) -ge $max_parallel_jobs ]; do
-                            wait -n
-                            # Clean up finished jobs from the list
-                            for i in ${!background_pids[@]}; do
-                                if ! kill -0 ${background_pids[$i]} 2> /dev/null; then
-                                    unset 'background_pids[$i]'
-                                fi
+                            background_pids+=($!)
+                            
+                            while [ $(jobs -r | wc -l) -ge $max_parallel_jobs ]; do
+                                wait -n
+                                # Чистим список PID'ов от завершённых задач
+                                for i in ${!background_pids[@]}; do
+                                    if ! kill -0 ${background_pids[$i]} 2> /dev/null; then
+                                        unset 'background_pids[$i]'
+                                    fi
+                                done
                             done
-                        done
-                    fi
+                        fi
+                    done
                 done
             done
         done
