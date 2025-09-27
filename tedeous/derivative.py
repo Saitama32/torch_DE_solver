@@ -97,7 +97,7 @@ class Derivative_autograd(DerivativeInt):
         gradient_full = grads[:, axis[-1]].reshape(-1, 1)
         return gradient_full
 
-    def take_derivative(self, term: dict, grid_points:  torch.Tensor) -> torch.Tensor:
+    def take_derivative(self, term: dict, grid_points:  torch.Tensor, create_graph: bool = True) -> torch.Tensor:
         """ Auxiliary function serves for single differential operator resulting field
         derivation.
 
@@ -122,7 +122,7 @@ class Derivative_autograd(DerivativeInt):
                 der = self.model(grid_points)[:, term['var'][j]].reshape(-1, 1)
             else:
                 der = self._nn_autograd(
-                    self.model, grid_points, term['var'][j], axis=derivative)
+                    self.model, grid_points, term['var'][j], axis=derivative, create_graph=create_graph)
             if isinstance(term['pow'][j], (int, float)):
                 der_term = der_term * der ** term['pow'][j]
             elif isinstance(term['pow'][j], Callable):
