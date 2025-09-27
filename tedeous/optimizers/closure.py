@@ -73,7 +73,7 @@ class Closure():
                                     dtype=self.dtype,
                                     enabled=self.mixed_precision):
                     # ключ: не строим второй порядок графа в PSO-без-градиента
-                    loss, loss_normalized = self.model.solution_cls.evaluate(create_graph=use_grad)
+                    loss, loss_normalized = self.model.solution_cls.evaluate(save_graph=use_grad)
 
             if use_grad:
                 grads = self.optimizer.gradient(loss)  # create_graph здесь не нужен
