@@ -461,25 +461,42 @@ class Model():
 
                 for i in itertools.count():
                     # state = torch.stack((state['loss_oper'], state['loss_bnd']), dim=0)
-                    n_steps += 1
+                    
                     action, action_raw, is_model = rl_agent.select_action(state)
                     action_raw[2]['epochs'] = action_raw[1]
                     action_raw = (action_raw[0], action_raw[2])
+                    n_steps += 1
 
-                    if n_steps == 1: # На самом первом шаге выбираем PSO
-                        optim_class = 2
+                    if n_steps == 1: # На самом первом шаге выбираем Adam
+                        optim_class = 0
                         class_name = rl_agent.i2opt[optim_class]
                         param_class = {}
                         optim_class_dict = rl_agent.optimizer_dict[class_name]
 
                         for key in optim_class_dict:
-                            if key == 'epochs': epochs_class = 0
+                            if key == 'epochs': epochs_class = 1
+                            else:
+                                param_class[key] = 2
+                        action = rl_agent.post_proc_model(optim_class, epochs_class, param_class)
+                        action_raw = (optim_class, epochs_class, param_class)
+                        action_raw[2]['epochs'] = action_raw[1]
+                        action_raw = (action_raw[0], action_raw[2])
+
+                    if n_steps == 2: # На втором шаге выбираем Lbfgs
+                        optim_class = 1
+                        class_name = rl_agent.i2opt[optim_class]
+                        param_class = {}
+                        optim_class_dict = rl_agent.optimizer_dict[class_name]
+
+                        for key in optim_class_dict:
+                            if key == 'epochs': epochs_class = 2
                             else:
                                 param_class[key] = 0
                         action = rl_agent.post_proc_model(optim_class, epochs_class, param_class)
                         action_raw = (optim_class, epochs_class, param_class)
                         action_raw[2]['epochs'] = action_raw[1]
                         action_raw = (action_raw[0], action_raw[2])
+                    
 
                     # action_raw = tupe_dqn_class[dqn_class]
                     if is_model:
