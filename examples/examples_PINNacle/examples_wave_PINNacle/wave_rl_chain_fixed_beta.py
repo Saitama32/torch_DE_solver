@@ -128,6 +128,11 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         torch.nn.Linear(neurons, pde_dim_out)
     )
 
+    for m in net.modules():
+        if isinstance(m, torch.nn.Linear):
+            torch.nn.init.xavier_normal_(m.weight)
+            torch.nn.init.zeros_(m.bias)
+            
     if torch.cuda.device_count() > 1:
         print("Использую", torch.cuda.device_count(), "GPU!")
         net = torch.nn.DataParallel(net)
@@ -144,10 +149,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
     u_exact_test = exact_func(grid_test).reshape(-1)
     equation_params = [u_exact_test, grid_test, grid, domain, equation, boundaries, model_layers]
 
-    for m in net.modules():
-        if isinstance(m, torch.nn.Linear):
-            torch.nn.init.xavier_normal_(m.weight)
-            torch.nn.init.zeros_(m.bias)
+
 
 
     # os.path.join(os.path.dirname(__file__), 'wave_1d_basic_img')
