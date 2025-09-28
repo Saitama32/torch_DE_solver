@@ -132,7 +132,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         if isinstance(m, torch.nn.Linear):
             torch.nn.init.xavier_normal_(m.weight)
             torch.nn.init.zeros_(m.bias)
-            
+
     if torch.cuda.device_count() > 1:
         print("Использую", torch.cuda.device_count(), "GPU!")
         net = torch.nn.DataParallel(net)
@@ -260,7 +260,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 0.035, 
+        "tolerance": 0.824, 
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
