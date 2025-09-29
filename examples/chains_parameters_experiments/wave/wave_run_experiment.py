@@ -204,7 +204,7 @@ def wave_1d_basic_experiment(experiment_args):
         epochs = experiment_args["epochs"]
         optim = Optimizer(opt_type, opt_params)
         model.train(optim, epochs, save_model=False, callbacks=[cb_es], info_string_every=20)
-        
+
     x = torch.linspace(0, 1, x_res)    # сетка по x
 
     grid = torch.cartesian_prod(torch.linspace(0, 1, x_res), torch.linspace(0, 1, t_res))
@@ -283,8 +283,8 @@ def main():
                         default='convection', help='PDE type')
     parser.add_argument('--pde_params', nargs='+', type=str,
                         default=None, help='PDE coefficients')
-    parser.add_argument('--opt', type=str, default='lbfgs',
-                        help='optimizer to use')
+    parser.add_argument('--opt', nargs='+', type=str, default=['lbfgs'],
+                        help='optimizer(s) to use')
     parser.add_argument('--opt_params', nargs='+', type=str,
                         default=None, help='optimizer parameters')
     parser.add_argument('--num_layers', type=int, default=4,
