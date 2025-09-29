@@ -196,7 +196,7 @@ def wave_1d_basic_experiment(experiment_args):
                 }
                 optimizer.append(opt_dict)
         
-        model.train(optim, 10, save_model=False, callbacks=[cb_es], info_string_every=20)
+        model.train(optimizer, 10, save_model=False, callbacks=[cb_es], info_string_every=20)
 
     else:
         opt_type = experiment_args["opt"] if isinstance(experiment_args["opt"], str) else experiment_args["opt"][0]
