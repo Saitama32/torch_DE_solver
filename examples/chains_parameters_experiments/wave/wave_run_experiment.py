@@ -185,14 +185,16 @@ def wave_1d_basic_experiment(experiment_args):
                 opt_params = parse_params(experiment_args[f"opt_params_{opt_name}"])
                 opt_dict = {
                     "name": opt_name,
-                    "params": opt_params
+                    "params": opt_params,
+                    "epochs": experiment_args["epochs_Adam"]
                 }
                 optimizer.append(opt_dict)
             if opt_name == "LBFGS":
                 opt_params = parse_params(experiment_args[f"opt_params_{opt_name}"])
                 opt_dict = {
                     "name": opt_name,
-                    "params": opt_params
+                    "params": opt_params,
+                    "epochs": experiment_args["epochs_LBFGS"]
                 }
                 optimizer.append(opt_dict)
         
