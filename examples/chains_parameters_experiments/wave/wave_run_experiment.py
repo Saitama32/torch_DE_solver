@@ -347,6 +347,10 @@ def main():
         "num_t": args.num_t,
         "num_res": args.num_res, 
         "epochs": args.epochs,
+        "opt_params_Adam": args.opt_params_Adam,
+        "opt_params_LBFGS": args.opt_params_LBFGS,
+        "epochs_Adam": args.epochs_Adam,
+        "epochs_LBFGS": args.epochs_LBFGS,
         "comet_project": args.comet_project,
         "device": f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu',
         "experiment": experiment
