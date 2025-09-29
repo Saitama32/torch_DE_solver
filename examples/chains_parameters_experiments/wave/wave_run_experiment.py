@@ -179,7 +179,7 @@ def wave_1d_basic_experiment(experiment_args):
                                          patience=5,
                                          randomize_parameter=1e-6,
                                          info_string_every=1)
-    if isinstance(experiment_args["opt"], list):
+    if isinstance(experiment_args["opt"], list) and len(experiment_args["opt"]) > 1:
         for opt_name in experiment_args["opt"]:
             if opt_name == "Adam":
                 opt_params = parse_params(experiment_args[f"opt_params_{opt_name}"])
@@ -199,7 +199,7 @@ def wave_1d_basic_experiment(experiment_args):
         model.train(optim, 10, save_model=False, callbacks=[cb_es], info_string_every=20)
 
     else:
-        opt_type = experiment_args["opt"]
+        opt_type = experiment_args["opt"] if isinstance(experiment_args["opt"], str) else experiment_args["opt"][0]
         opt_params = parse_params(experiment_args["opt_params"])
         epochs = experiment_args["epochs"]
         optim = Optimizer(opt_type, opt_params)
