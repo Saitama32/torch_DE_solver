@@ -13,7 +13,7 @@ class PSO(torch.optim.Optimizer):
 
     def __init__(self,
                  params,
-                 pop_size: int = 30,
+                 pop_size: int = 100,
                  b: float = 0.9,
                  c1: float = 8e-2,
                  c2: float = 5e-1,
