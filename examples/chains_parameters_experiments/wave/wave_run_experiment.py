@@ -16,6 +16,8 @@ import argparse
 import sys
 import traceback
 import random
+import tempfile
+import datetime
 
 
 
@@ -73,6 +75,7 @@ def exact_func(grid, beta=5):
 
 def wave_1d_basic_experiment(experiment_args):
 
+    optimizer = []
     x_min, x_max = 0, 1
     t_max = 1
 
@@ -176,12 +179,32 @@ def wave_1d_basic_experiment(experiment_args):
                                          patience=5,
                                          randomize_parameter=1e-6,
                                          info_string_every=1)
-    opt_type = experiment_args["opt"]
-    opt_params = parse_params(experiment_args["opt_params"])
-    epochs = experiment_args["epochs"]
+    if isinstance(experiment_args["opt"], list):
+        for opt_name in experiment_args["opt"]:
+            if opt_name == "Adam":
+                opt_params = parse_params(experiment_args[f"opt_params_{opt_name}"])
+                opt_dict = {
+                    "name": opt_name,
+                    "params": opt_params
+                }
+                optimizer.append(opt_dict)
+            if opt_name == "LBFGS":
+                opt_params = parse_params(experiment_args[f"opt_params_{opt_name}"])
+                opt_dict = {
+                    "name": opt_name,
+                    "params": opt_params
+                }
+                optimizer.append(opt_dict)
+        
+        model.train(optim, 10, save_model=False, callbacks=[cb_es], info_string_every=20)
 
-    optim = Optimizer(opt_type, opt_params)
-    model.train(optim, epochs, save_model=False, callbacks=[cb_es], info_string_every=20)
+    else:
+        opt_type = experiment_args["opt"]
+        opt_params = parse_params(experiment_args["opt_params"])
+        epochs = experiment_args["epochs"]
+        optim = Optimizer(opt_type, opt_params)
+        model.train(optim, epochs, save_model=False, callbacks=[cb_es], info_string_every=20)
+        
     x = torch.linspace(0, 1, x_res)    # сетка по x
 
     grid = torch.cartesian_prod(torch.linspace(0, 1, x_res), torch.linspace(0, 1, t_res))
@@ -233,7 +256,20 @@ def wave_1d_basic_experiment(experiment_args):
     "error_l2re_test": error_l2re_test.item()
     })
 
-    
+                # Сохраняем модель во временные файлы
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp_optim:
+        torch.save(net.state_dict(), tmp_optim.name)
+        optim_path = tmp_optim.name
+
+    # --- логируем как модельные файлы ---
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    experiment_args["experiment"].exp.log_model(
+        name="rl_agent_optim",
+        file_or_folder=optim_path,
+        file_name=f"model_{opt_type}_{timestamp}.pt",
+        overwrite=True,
+    )
+
 
 
 

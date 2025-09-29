@@ -14,7 +14,7 @@ epochs=2050
 betas=(5)
 devices=(0)
 line_search_fn='strong_wolfe'
-proj=wave_lbfgs_parameters
+proj=wave_lbfgs_parameters_full_rmse
 max_parallel_jobs=5
 
 background_pids=()

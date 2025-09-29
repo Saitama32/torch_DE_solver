@@ -4,16 +4,18 @@ pde=wave
 seeds=(123 234 345 456 567)
 losses=(mse)
 n_neurons=(100 200 400)
+history_size=(100 200)
 n_layers=4
 num_x=257
 num_t=101
 num_res=10000
-opt=Adam
+opt=(Adam LBFGS)
 lrs=(0.0001 0.001 0.01)
-epochs=15000
+epochs_Adam=10
+epochs_LBFGS=5
 betas=(5)
 devices=(0)
-proj=wave_adam_parameters__full_rmse
+proj=wave_adam_lbfgs_parameters_full_rmse
 max_parallel_jobs=5
 
 background_pids=()
@@ -47,9 +49,9 @@ do
                         device=${devices[current_device]}
                         current_device=$(( (current_device + 1) % ${#devices[@]} ))
 
-                        python wave_run_experiment.py --seed $seed --pde $pde --pde_params beta $beta --opt $opt \
-                            --opt_params lr $lr --num_layers $n_layers --num_neurons $n_neuron \
-                            --loss $loss --num_x $num_x --num_t $num_t --num_res $num_res --epochs $epochs --comet_project $proj \
+                        python wave_run_experiment.py --seed $seed --pde $pde --pde_params beta $beta --opt "${opt[@]}" \
+                            --opt_params_Adam lr $lr --opt_params_LBFGS history_size $history_size --num_layers $n_layers --num_neurons $n_neuron \
+                            --loss $loss --num_x $num_x --num_t $num_t --num_res $num_res --epochs_Adam $epochs_Adam --epochs_LBFGS $epochs_LBFGS  --comet_project $proj \
                             --device $device &
 
                         background_pids+=($!)
