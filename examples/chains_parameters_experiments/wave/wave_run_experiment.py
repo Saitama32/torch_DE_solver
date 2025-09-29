@@ -287,6 +287,10 @@ def main():
                         help='optimizer(s) to use')
     parser.add_argument('--opt_params', nargs='+', type=str,
                         default=None, help='optimizer parameters')
+    parser.add_argument('--opt_params_Adam', nargs='+', type=str,
+                        default=None, help='optimizer parameters')
+    parser.add_argument('--opt_params_LBFGS', nargs='+', type=str,
+                    default=None, help='optimizer parameters')
     parser.add_argument('--num_layers', type=int, default=4,
                         help='number of layers of the neural net')
     parser.add_argument('--num_neurons', type=int, default=50,
@@ -300,6 +304,10 @@ def main():
     parser.add_argument('--num_res', type=int, default=10000,
                         help='number of sampled residual points')
     parser.add_argument('--epochs', type=int, default=1000,
+                        help='number of epochs to run')
+    parser.add_argument('--epochs_Adam', type=int, default=1000,
+                        help='number of epochs to run')
+    parser.add_argument('--epochs_LBFGS', type=int, default=1000,
                         help='number of epochs to run')
     parser.add_argument('--comet_project', type=str,
                         default='pinns', help='W&B project name')
