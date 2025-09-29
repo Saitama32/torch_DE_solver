@@ -265,7 +265,7 @@ def wave_1d_basic_experiment(experiment_args):
 
     # --- логируем как модельные файлы ---
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    experiment_args["experiment"].exp.log_model(
+    experiment_args["experiment"].log_model(
         name="rl_agent_optim",
         file_or_folder=optim_path,
         file_name=f"model_{opt_type}_{timestamp}.pt",
