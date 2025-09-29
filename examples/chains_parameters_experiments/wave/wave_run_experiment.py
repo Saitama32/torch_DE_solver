@@ -268,13 +268,9 @@ def wave_1d_basic_experiment(experiment_args):
     experiment_args["experiment"].log_model(
         name="rl_agent_optim",
         file_or_folder=optim_path,
-        file_name=f"model_{opt_type}_{timestamp}.pt",
+        file_name=f"model_{timestamp}.pt",
         overwrite=True,
     )
-
-
-
-
 
 
 def main():
@@ -357,6 +353,8 @@ def main():
         "device": f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu',
         "experiment": experiment
     }
+
+    print(experiment_args)
 
     # print out arguments
     print("Seed set to: {}".format(initial_seed))
