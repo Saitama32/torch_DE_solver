@@ -358,7 +358,7 @@ class Model():
             # total_reward = 0
             # optimizers_history = []
 
-            done = None
+            done = 0
             idx_traj = 0
             n_steps = 0
             n_steps_max = 1512
@@ -514,9 +514,9 @@ class Model():
                         stuck_threshold=rl_agent_params['stuck_threshold']
                     )
 
-                    if loss != loss:
-                        self.rl_penalty = 0
-                        break
+                    # if loss != loss:
+                    #     self.rl_penalty = 0
+                    #     break
 
                     env.rl_penalty = self.rl_penalty
 
