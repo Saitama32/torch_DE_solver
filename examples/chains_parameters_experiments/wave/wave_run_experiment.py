@@ -170,9 +170,6 @@ def wave_1d_basic_experiment(experiment_args):
             torch.nn.init.zeros_(m.bias)
 
 
-
-
-
     cb_es = early_stopping.EarlyStopping(eps=1e-6,
                                          loss_window=100,
                                          no_improvement_patience=1000,
@@ -189,22 +186,54 @@ def wave_1d_basic_experiment(experiment_args):
 
     grid = torch.cartesian_prod(torch.linspace(0, 1, x_res), torch.linspace(0, 1, t_res))
     
-    error_rmse_train = torch.sqrt(torch.mean((exact_func(grid).reshape(-1, 1) - net(grid)) ** 2))
-    error_l2re_train = torch.sqrt(torch.sum(
-        (exact_func(grid).reshape(-1, 1) - net(grid)) ** 2) / torch.sum(exact_func(grid).reshape(-1, 1) ** 2))
-    print(f"Train RMSE: {error_rmse_train}, L2RE: {error_l2re_train}")
+    error_op_rmse_train = torch.sqrt(torch.mean((exact_func(grid).reshape(-1, 1) - net(grid)) ** 2))
+    variable_dict = domain.variable_dict
+    bconds = boundaries.build(variable_dict)
+    error_bnd_rmse_train = torch.sum(torch.stack([
+                        torch.sqrt(torch.mean(
+                            (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
+                        ))
+                        for b in bconds
+                    ]))
+    error_rmse_train_full = error_op_rmse_train + error_bnd_rmse_train
 
-    error_rmse_test = torch.sqrt(torch.mean((exact_func(grid_test).reshape(-1, 1) - net(grid_test)) ** 2))
+    error_l2re_train = torch.sqrt(torch.sum(
+    (exact_func(grid).reshape(-1, 1) - net(grid)) ** 2) / torch.sum(exact_func(grid).reshape(-1, 1) ** 2))
+    print(f"Train full RMSE: {error_rmse_train_full}, Train op RMSE: {error_op_rmse_train}, Train bnd RMSE: {error_bnd_rmse_train}, L2RE op: {error_l2re_train}")
+
+
+    # Test errors
+    domain_test = Domain()
+    domain_test.variable('x', [x_min, x_max], 100)
+    domain_test.variable('t', [0, t_max], 100)
+    variable_dict = domain_test.variable_dict
+    bconds = boundaries.build(variable_dict)
+
+    error_op_rmse_test = torch.sqrt(torch.mean((exact_func(grid_test).reshape(-1, 1) - net(grid_test)) ** 2))
+    error_bnd_rmse_test = torch.sum(torch.stack([
+                    torch.sqrt(torch.mean(
+                        (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
+                    ))
+                    for b in bconds
+                ]))
+    error_rmse_test_full = error_op_rmse_test + error_bnd_rmse_test
     error_l2re_test = torch.sqrt(torch.sum(
         (exact_func(grid_test).reshape(-1, 1) - net(grid_test)) ** 2) / torch.sum(exact_func(grid_test).reshape(-1, 1) ** 2))
-    print(f"Test RMSE: {error_rmse_test}, L2RE: {error_l2re_test}")
+    print(f"Train full RMSE: {error_rmse_test_full}, Train op RMSE: {error_op_rmse_test}, Train bnd RMSE: {error_bnd_rmse_test}, L2RE op: {error_l2re_test}")
+
     
     experiment_args["experiment"].log_parameters({
-    "error_rmse_train": error_rmse_train.item(),
+    "error_op_rmse_train": error_op_rmse_train.item(),
+    "error_bnd_rmse_train": error_bnd_rmse_train.item(),
+    "error_rmse_train_full": error_rmse_train_full.item(),
     "error_l2re_train": error_l2re_train.item(),
-    "error_rmse_test": error_rmse_test.item(),
+    "error_op_rmse_test": error_op_rmse_test.item(),
+    "error_bnd_rmse_test": error_bnd_rmse_test.item(),
+    "error_rmse_test_full": error_rmse_test_full.item(),
     "error_l2re_test": error_l2re_test.item()
     })
+
+    
 
 
 
