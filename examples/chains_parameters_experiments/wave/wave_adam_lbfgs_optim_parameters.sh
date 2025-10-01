@@ -9,7 +9,7 @@ n_layers=4
 num_x=257
 num_t=101
 num_res=10000
-opt=(Adam LBFGS)
+# opt='[Adam LBFGS]'
 lrs=(0.0001 0.001 0.01)
 epochs_Adam=1000
 epochs_LBFGS=2050
@@ -49,7 +49,7 @@ do
                         device=${devices[current_device]}
                         current_device=$(( (current_device + 1) % ${#devices[@]} ))
 
-                        python wave_run_experiment.py --seed $seed --pde $pde --pde_params beta $beta --opt "${opt[@]}" \
+                        python wave_run_experiment.py --seed $seed --pde $pde --pde_params beta $beta --opt Adam LBFGS \
                             --opt_params_Adam lr $lr --opt_params_LBFGS history_size $history_size --num_layers $n_layers --num_neurons $n_neuron \
                             --loss $loss --num_x $num_x --num_t $num_t --num_res $num_res --epochs_Adam $epochs_Adam --epochs_LBFGS $epochs_LBFGS  --comet_project $proj \
                             --device $device &
