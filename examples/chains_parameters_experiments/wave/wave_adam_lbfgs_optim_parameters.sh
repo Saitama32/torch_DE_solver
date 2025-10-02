@@ -49,7 +49,6 @@ do
                     do
                         if [ $interrupted -eq 0 ]; then
                             device=${devices[current_device]}
-                            current_device=$(( (current_device + 1) % ${#devices[@]} ))
                             echo "Running: seed=$seed loss=$loss n_neuron=$n_neuron beta=$beta lr=$lr hsize=$hsize"
 
                             python wave_run_experiment.py --seed $seed --pde $pde --pde_params beta $beta \

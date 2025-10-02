@@ -350,7 +350,7 @@ def main():
         "epochs_Adam": args.epochs_Adam,
         "epochs_LBFGS": args.epochs_LBFGS,
         "comet_project": args.comet_project,
-        "device": f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu',
+        "device": f'cuda:{args.device}',
         "experiment": experiment
     }
 
