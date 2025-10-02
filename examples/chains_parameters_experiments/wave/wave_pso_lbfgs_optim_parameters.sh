@@ -1,0 +1,87 @@
+#!/bin/bash
+
+pde=wave
+seeds=(123 234 345 456 567)
+losses=(mse)
+n_neurons=(100 200 400)
+history_size=(100 200)
+n_layers=4
+num_x=257
+num_t=101
+num_res=10000
+# opt='[Adam LBFGS]'
+lrs=(0.0 0.0001 0.001)
+epochs_PSO=300
+epochs_LBFGS=2050
+betas=(5)
+devices=(0)
+proj=wave_adam_lbfgs_parameters_full_rmse
+max_parallel_jobs=3
+
+background_pids=()
+current_device=0
+
+interrupted=0  # Flag to indicate if Ctrl+C is pressed
+
+# Function to handle SIGINT (Ctrl+C)
+cleanup() {
+    echo "Interrupt received, stopping background jobs..."
+    interrupted=1  # Set the flag
+    for pid in "${background_pids[@]}"; do
+        kill $pid 2>/dev/null
+    done
+}
+
+# Trap SIGINT
+trap cleanup SIGINT
+
+for seed in "${seeds[@]}"
+do
+    for loss in "${losses[@]}"
+    do
+        for n_neuron in "${n_neurons[@]}"
+        do
+            for beta in "${betas[@]}"
+            do
+                for hsize in "${history_size[@]}"
+                do
+                    for lr in "${lrs[@]}"
+                    do
+                        if [ $interrupted -eq 0 ]; then
+                            device=${devices[current_device]}
+                            current_device=$(( (current_device + 1) % ${#devices[@]} ))
+                            echo "Running: seed=$seed loss=$loss n_neuron=$n_neuron beta=$beta lr=$lr hsize=$hsize"
+
+                            python wave_run_experiment.py --seed $seed --pde $pde --pde_params beta $beta \
+                                --opt PSO LBFGS \
+                                --opt_params_PSO lr $lr \
+                                --opt_params_LBFGS history_size $hsize \
+                                --num_layers $n_layers --num_neurons $n_neuron \
+                                --loss $loss --num_x $num_x --num_t $num_t --num_res $num_res \
+                                --epochs_PSO $epochs_PSO --epochs_LBFGS $epochs_LBFGS \
+                                --comet_project $proj --device $device &
+
+                            background_pids+=($!)
+                            
+                            while [ $(jobs -r | wc -l) -ge $max_parallel_jobs ]; do
+                                wait -n
+                                # Чистим список PID'ов от завершённых задач
+                                for i in ${!background_pids[@]}; do
+                                    if ! kill -0 ${background_pids[$i]} 2> /dev/null; then
+                                        unset 'background_pids[$i]'
+                                    fi
+                                done
+                            done
+                        fi
+                    done
+                done
+            done
+        done
+    done
+done
+
+# Wait for all background jobs to complete
+wait
+
+# Cleanup on normal exit
+cleanup

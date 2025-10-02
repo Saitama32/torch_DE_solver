@@ -189,6 +189,14 @@ def wave_1d_basic_experiment(experiment_args):
                     "epochs": experiment_args["epochs_Adam"]
                 }
                 optimizer.append(opt_dict)
+            if opt_name == "PSO":
+                opt_params = parse_params(experiment_args[f"opt_params_{opt_name}"])
+                opt_dict = {
+                    "name": opt_name,
+                    "params": opt_params,
+                    "epochs": experiment_args["epochs_PSO"]
+                }
+                optimizer.append(opt_dict)
             if opt_name == "LBFGS":
                 opt_params = parse_params(experiment_args[f"opt_params_{opt_name}"])
                 opt_dict = {
@@ -287,6 +295,8 @@ def main():
                         default=None, help='optimizer parameters')
     parser.add_argument('--opt_params_Adam', nargs='+', type=str,
                         default=None, help='optimizer parameters')
+    parser.add_argument('--opt_params_PSO', nargs='+', type=str,
+                        default=None, help='optimizer parameters')
     parser.add_argument('--opt_params_LBFGS', nargs='+', type=str,
                     default=None, help='optimizer parameters')
     parser.add_argument('--num_layers', type=int, default=4,
@@ -304,6 +314,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=1000,
                         help='number of epochs to run')
     parser.add_argument('--epochs_Adam', type=int, default=1000,
+                        help='number of epochs to run')
+    parser.add_argument('--epochs_PSO', type=int, default=200,
                         help='number of epochs to run')
     parser.add_argument('--epochs_LBFGS', type=int, default=1000,
                         help='number of epochs to run')
@@ -346,8 +358,10 @@ def main():
         "num_res": args.num_res, 
         "epochs": args.epochs,
         "opt_params_Adam": args.opt_params_Adam,
+        "opt_params_PSO": args.opt_params_PSOs,
         "opt_params_LBFGS": args.opt_params_LBFGS,
         "epochs_Adam": args.epochs_Adam,
+        "epochs_PSO": args.epochs_PSO,
         "epochs_LBFGS": args.epochs_LBFGS,
         "comet_project": args.comet_project,
         "device": f'cuda:{args.device}',
