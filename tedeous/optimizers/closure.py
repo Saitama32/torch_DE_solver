@@ -1,5 +1,6 @@
 import torch
 from tedeous.device import device_type
+import contextlib
 
 
 class Closure():
@@ -64,12 +65,15 @@ class Closure():
         return loss
 
     def _closure_pso(self):
-        def loss_grads():
-            self.optimizer.zero_grad()
-            with torch.autocast(device_type=self.device,
-                                dtype=self.dtype,
-                                enabled=self.mixed_precision):
-                loss, loss_normalized = self.model.solution_cls.evaluate()
+        def loss_grads(use_grad: bool):
+            # градиенты не нужны? выключаем граф и AMP-скалер на backward
+            ctx_no_grad = torch.no_grad() if not use_grad else contextlib.nullcontext()
+            with ctx_no_grad:
+                with torch.autocast(device_type=self.device,
+                                    dtype=self.dtype,
+                                    enabled=self.mixed_precision):
+                    # ключ: не строим второй порядок графа в PSO-без-градиента
+                    loss, loss_normalized = self.model.solution_cls.evaluate(save_graph=use_grad, create_graph=use_grad)
 
             if self.optimizer.use_grad:
                 grads = self.optimizer.gradient(loss)

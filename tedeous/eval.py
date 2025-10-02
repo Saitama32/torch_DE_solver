@@ -130,6 +130,7 @@ class Operator():
             torch.cuda.empty_cache()
             self.init_mini_batches()
             self.current_batch_i = 0
+        self.create_graph = True
         self.derivative = Derivative(self.model,
                                 self.derivative_points).set_strategy(self.mode).take_derivative
 
@@ -154,10 +155,9 @@ class Operator():
         Returns:
             total (torch.Tensor): Decoded operator on a single grid subset.
         """
-
         for term in operator:
             term = operator[term]
-            dif = self.derivative(term, grid_points)
+            dif = self.derivative(term, grid_points, create_graph=self.create_graph)
             try:
                 total += dif
             except NameError:
@@ -261,6 +261,7 @@ class Bounds():
         self.operator = Operator(self.grid, self.prepared_bconds,
                                        self.model, self.mode, weak_form,
                                        derivative_points)
+        self.operator.create_graph = True
 
     def _apply_bconds_set(self, operator_set: list) -> torch.Tensor:
         """ Method only for *NN* mode. Calculate boundary conditions with derivatives

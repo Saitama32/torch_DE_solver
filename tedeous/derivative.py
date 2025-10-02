@@ -74,7 +74,8 @@ class Derivative_autograd(DerivativeInt):
     def _nn_autograd(model: torch.nn.Module,
                      points: torch.Tensor,
                      var: int,
-                     axis: List[int] = [0]):
+                     axis: List[int] = [0],
+                     create_graph: bool = True):
         """ Computes derivative on the grid using autograd method.
 
         Args:
@@ -89,7 +90,7 @@ class Derivative_autograd(DerivativeInt):
                 in corresponding axis.
         """
 
-            # Если граф не нужен (например, PSO без градиента) → сразу вернуть нули
+        # Если граф не нужен (например, PSO без градиента) → сразу вернуть нули
         if not create_graph:
             return torch.zeros((points.shape[0], 1), device=points.device, dtype=points.dtype)
 
