@@ -9,13 +9,13 @@ num_x=257
 num_t=101
 num_res=10000
 opt=PSO
-lrs=(0.0001 0.001 0.0)
-pop_size=(20 30 40)
+lrs=(0.0 0.0001 0.001)
+pop_size=(30 50 100)
 epochs=1500
 betas=(5)
 devices=(0)
 proj=wave_pso_parameters
-max_parallel_jobs=2
+max_parallel_jobs=3
 
 background_pids=()
 current_device=0
