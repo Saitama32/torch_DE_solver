@@ -358,7 +358,7 @@ def main():
         "num_res": args.num_res, 
         "epochs": args.epochs,
         "opt_params_Adam": args.opt_params_Adam,
-        "opt_params_PSO": args.opt_params_PSOs,
+        "opt_params_PSO": args.opt_params_PSO,
         "opt_params_LBFGS": args.opt_params_LBFGS,
         "epochs_Adam": args.epochs_Adam,
         "epochs_PSO": args.epochs_PSO,
