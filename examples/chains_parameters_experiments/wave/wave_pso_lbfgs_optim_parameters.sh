@@ -15,7 +15,7 @@ epochs_PSO=300
 epochs_LBFGS=2050
 betas=(5)
 devices=(0)
-proj=wave_adam_lbfgs_parameters_full_rmse
+proj=wave_pso_adam_lbfgs_parameters_full_rmse
 max_parallel_jobs=3
 
 background_pids=()
