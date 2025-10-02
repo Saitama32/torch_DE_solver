@@ -1,7 +1,7 @@
 #!/bin/bash
 
 pde=wave
-seeds=(345 456 567 234 123)
+seeds=(234 123 345 456 567)
 losses=(mse)
 n_neurons=(100 200 400)
 history_size=(100 200)
