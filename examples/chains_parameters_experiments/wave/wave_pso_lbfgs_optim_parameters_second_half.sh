@@ -1,7 +1,7 @@
 #!/bin/bash
 
 pde=wave
-seeds=(123 234 345 456 567)
+seeds=(345 456 567 234 123)
 losses=(mse)
 n_neurons=(100 200 400)
 history_size=(100 200)
@@ -15,7 +15,7 @@ epochs_PSO=300
 epochs_LBFGS=2050
 betas=(5)
 devices=(0)
-proj=wave_pso_adam_lbfgs_parameters_full_rmse
+proj=wave_pso_lbfgs_parameters_full_rmse
 max_parallel_jobs=3
 
 background_pids=()

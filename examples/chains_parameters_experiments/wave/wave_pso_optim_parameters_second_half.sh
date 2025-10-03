@@ -1,7 +1,7 @@
 #!/bin/bash
 
 pde=wave
-seeds=(123 234 345 456 567)
+seeds=(345 456 567 234 123)
 losses=(mse)
 n_neurons=(100 200 400)
 n_layers=4
@@ -11,7 +11,7 @@ num_res=10000
 opt=PSO
 lrs=(0.0 0.0001 0.001)
 pop_size=(30 50 100)
-epochs=1500
+epochs=3000
 betas=(5)
 devices=(0)
 proj=wave_pso_parameters
