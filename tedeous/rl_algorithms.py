@@ -122,7 +122,7 @@ class DQNAgent:
 
     def _stack_state(self, st):
     # dict {'loss_oper': Tensor[676], 'loss_bnd': Tensor[676]} -> Tensor[2,26,26]
-        x = torch.cat((st['loss_oper'], st['loss_bnd']), 0)
+        x = torch.cat((st['loss_oper'].to(self.device), st['loss_bnd'].to(self.device)), 0)
         return x.view(2, 26, 26)
 
     def _get_param_act_idx(self, action_i, pname):
@@ -169,8 +169,8 @@ class DQNAgent:
             state, next_state, action, reward, done, model_reward, opt_model_i = zip(*batch)
             B = len(batch)
 
-            state  = torch.stack([self._stack_state(s.to(self.device))  for s in state])      # (B,2,26,26)
-            next_state = torch.stack([self._stack_state(s2) for s2 in next_state]).to(self.device)
+            state  = torch.stack([self._stack_state(s)  for s in state])      # (B,2,26,26)
+            next_state = torch.stack([self._stack_state(s2) for s2 in next_state])
             reward   = torch.tensor(reward, dtype=torch.float, device=self.device)              # (B,)
             done_raw = torch.tensor(done, dtype=torch.int8, device=self.device)    # сохраняем знак для метрик
             done = (done_raw != 0).float()        
