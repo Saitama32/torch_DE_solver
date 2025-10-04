@@ -14,6 +14,8 @@ from math import ceil
 import statistics
 from tedeous.DQN_classes import DQN_optim, DQN_params
 from comet_ml.integration.pytorch import watch
+from tedeous.RL_utils.per_buffer import PrioritizedReplayBuffer, Transition
+from tedeous.RL_utils.per_offline import recalc_all_priorities_batched
 
 
 import tempfile
@@ -25,61 +27,11 @@ EPS_END = 0.05
 EPS_DECAY = 1000
 TAU = 0.01
 
-Transition = namedtuple('Transition',
-                        ('state', 'next_state', 'action', 'reward', 'done', 'model_reward', 'opt_model_i'))
-    
-
-# ---------- Prioritized Experience Replay (proportional) ----------
-class PrioritizedReplayBuffer:
-    def __init__(self, capacity, alpha=0.6, eps=1e-6):
-        self.capacity = capacity
-        self.alpha = alpha
-        self.eps = eps
-        self.memory, self.prior, self.pos = [], [], 0
-
-    def __len__(self):
-        return len(self.memory)
-
-    def push(self, *args, priority=None):
-        # args: (state, next_state, action, reward, done, model_reward, opt_model_i)
-        tr = Transition(*args)
-        if priority is None:
-            p = max(self.prior) if self.prior else 1.0
-        else:
-            p = float(priority)
-
-        if len(self.memory) < self.capacity:
-            self.memory.append(tr); self.prior.append(p)
-        else:
-            self.memory[self.pos] = tr; self.prior[self.pos] = p
-            self.pos = (self.pos + 1) % self.capacity
-
-    def sample(self, batch_size, beta=0.4, device='cpu'):
-        pr = torch.tensor(self.prior, dtype=torch.float, device=device)
-        probs = (pr + self.eps) ** self.alpha
-        probs = probs / probs.sum()
-
-        idxs = torch.multinomial(
-            probs, batch_size,
-            replacement=len(self.memory) < batch_size
-        )
-
-        # w_j = (N * P(j))^{-β} / max_i w_i
-        N = len(self.memory)
-        weights = (N * probs[idxs]).pow(-beta)
-        weights = (weights / weights.max()).float()
-
-        batch = [self.memory[int(i)] for i in idxs]
-        return batch, idxs, weights
-
-    def update_priorities(self, idxs, new_p):
-        for i, p in zip(idxs.tolist(), new_p.tolist()):
-            self.prior[int(i)] = float(max(p, self.eps))
-
 
 class DQNAgent:
     def __init__(self, n_observation=None, n_action=None, optimizer_dict=None, lr=1e-3, gamma=0.95, epsilon=1.0,
-                 epsilon_decay=0.995, epsilon_min=0.01, memory_size=10000, batch_size=128, n_transitions_reinit = 2000, per_alpha =  0.6, per_beta0 = 0.4, device='cpu', exp=None):
+                 epsilon_decay=0.995, epsilon_min=0.01, memory_size=10000, batch_size=128, n_transitions_reinit = 2000, per_alpha =  0.6, per_beta0 = 0.4, device='cpu', exp=None,
+                 warmup_updates: int = 35, recalc_batch_size: int = 32,):
         self.n_observation = n_observation
         self.n_action = n_action
         self.gamma = gamma
@@ -104,6 +56,14 @@ class DQNAgent:
         self.per_beta  = per_beta0
         self.per_beta_inc = (1.0 - per_beta0) / 100000.0
         self.replay_buffer = PrioritizedReplayBuffer(memory_size, alpha=per_alpha)
+
+        #warmup
+        self.warmup_updates_total = warmup_updates
+        self.warmup_updates_done = 0
+        self.warmup_active = warmup_updates > 0
+        self.recalc_done = False
+        self.recalc_batch_size = recalc_batch_size
+
 
         self.device = device
         self.exp = exp
@@ -198,14 +158,18 @@ class DQNAgent:
             if len(self.replay_buffer) < self.batch_size:
                 break
 
-            batch, idxs, is_w = self.replay_buffer.sample(self.batch_size, beta=self.per_beta, device=self.device)
-            self.per_beta = min(1.0, self.per_beta + self.per_beta_inc)
-            is_w = is_w.to(self.device)
+            if self.warmup_active:
+                batch, idxs, is_w = self.replay_buffer.sample_uniform(self.batch_size, device=self.device)
+                is_w = is_w.to(self.device)  # все единицы
+            else:
+                batch, idxs, is_w = self.replay_buffer.sample(self.batch_size, beta=self.per_beta, device=self.device)
+                self.per_beta = min(1.0, self.per_beta + self.per_beta_inc)
+                is_w = is_w.to(self.device)
 
             state, next_state, action, reward, done, model_reward, opt_model_i = zip(*batch)
             B = len(batch)
 
-            state  = torch.stack([self._stack_state(s)  for s in state]).to(self.device)      # (B,2,26,26)
+            state  = torch.stack([self._stack_state(s.to(self.device))  for s in state])      # (B,2,26,26)
             next_state = torch.stack([self._stack_state(s2) for s2 in next_state]).to(self.device)
             reward   = torch.tensor(reward, dtype=torch.float, device=self.device)              # (B,)
             done_raw = torch.tensor(done, dtype=torch.int8, device=self.device)    # сохраняем знак для метрик
@@ -271,6 +235,14 @@ class DQNAgent:
             with torch.no_grad():
                 new_priors = td_opt_abs + torch.tensor(td_param_items, device=self.device)
             self.replay_buffer.update_priorities(idxs, new_priors.cpu())
+
+            if self.warmup_active:
+                self.warmup_updates_done += 1
+                if self.warmup_updates_done >= self.warmup_updates_total and not self.recalc_done:
+                    print(f"Warmup finished: {self.warmup_updates_done} updates. Recalculating priorities offline...")
+                    recalc_all_priorities_batched(self, batch_size=self.recalc_batch_size)
+                    self.recalc_done = True
+                    self.warmup_active = False
 
             # --- периодическое обновление таргет-сетей (как у тебя) ---
             print("\nRL optimization is complete!\n")
