@@ -4,7 +4,8 @@ pde=wave
 seeds=(345 456 567 234 123)
 losses=(mse)
 n_neurons=(100 200 400)
-history_size=(100 200)
+history_size=(100)
+lrs=(1 0.5 0.01)
 n_layers=4
 num_x=257
 num_t=101
@@ -44,39 +45,42 @@ do
             do
                 for hist in "${history_size[@]}"
                 do
-                    if [ $interrupted -eq 0 ]; then  # Check if Ctrl+C has been pressed
-                        device=${devices[current_device]}
-                        current_device=$(( (current_device + 1) % ${#devices[@]} ))
+                    for lr in "${lrs[@]}"
+                    do
+                        if [ $interrupted -eq 0 ]; then  # Check if Ctrl+C has been pressed
+                            device=${devices[current_device]}
+                            current_device=$(( (current_device + 1) % ${#devices[@]} ))
 
-                        python wave_run_experiment.py \
-                            --seed $seed \
-                            --pde $pde \
-                            --pde_params beta $beta \
-                            --opt $opt \
-                            --opt_params history_size $hist line_search_fn $line_search_fn\
-                            --num_layers $n_layers \
-                            --num_neurons $n_neuron \
-                            --loss $loss \
-                            --num_x $num_x \
-                            --num_t $num_t \
-                            --num_res $num_res \
-                            --epochs $epochs \
-                            --comet_project $proj \
-                            --device $device &
+                            python wave_run_experiment.py \
+                                --seed $seed \
+                                --pde $pde \
+                                --pde_params beta $beta \
+                                --opt $opt \
+                                --opt_params history_size $hist line_search_fn $line_search_fn lr $lr\
+                                --num_layers $n_layers \
+                                --num_neurons $n_neuron \
+                                --loss $loss \
+                                --num_x $num_x \
+                                --num_t $num_t \
+                                --num_res $num_res \
+                                --epochs $epochs \
+                                --comet_project $proj \
+                                --device $device &
 
-                        background_pids+=($!)
+                            background_pids+=($!)
 
-                        # Limit the number of parallel jobs
-                        while [ $(jobs | wc -l) -ge $max_parallel_jobs ]; do
-                            wait -n
-                            # Clean up finished jobs from the list
-                            for i in ${!background_pids[@]}; do
-                                if ! kill -0 ${background_pids[$i]} 2> /dev/null; then
-                                    unset 'background_pids[$i]'
-                                fi
+                            # Limit the number of parallel jobs
+                            while [ $(jobs | wc -l) -ge $max_parallel_jobs ]; do
+                                wait -n
+                                # Clean up finished jobs from the list
+                                for i in ${!background_pids[@]}; do
+                                    if ! kill -0 ${background_pids[$i]} 2> /dev/null; then
+                                        unset 'background_pids[$i]'
+                                    fi
+                                done
                             done
-                        done
-                    fi
+                        fi
+                    done
                 done
             done
         done
