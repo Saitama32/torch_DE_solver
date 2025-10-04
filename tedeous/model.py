@@ -22,6 +22,8 @@ from tedeous.rl_algorithms import DQNAgent, PrioritizedReplayBuffer, Transition
 from tedeous.rl_environment import EnvRLOptimizer
 import os
 
+from tedeous.RL_utils.load_exps_from_comet import collect_all_comet_transitions
+
 
 # import random, math
 # torch.manual_seed(1438)
@@ -431,6 +433,8 @@ class Model():
             # rl_agent.n_transitions_reinit = 1000
             # rl_agent.replay_buffer = PrioritizedReplayBuffer(rl_agent_params["rl_buffer_size"])
 
+            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=15)
+
             while n_steps < n_steps_max:
 
                 with torch.no_grad():
@@ -467,20 +471,20 @@ class Model():
                     action_raw = (action_raw[0], action_raw[2])
                     n_steps += 1
 
-                    if n_steps == 1: # На самом первом шаге выбираем Adam
-                        optim_class = 2
-                        class_name = rl_agent.i2opt[optim_class]
-                        param_class = {}
-                        optim_class_dict = rl_agent.optimizer_dict[class_name]
+                    # if n_steps == 1: # На самом первом шаге выбираем Adam
+                    #     optim_class = 2
+                    #     class_name = rl_agent.i2opt[optim_class]
+                    #     param_class = {}
+                    #     optim_class_dict = rl_agent.optimizer_dict[class_name]
 
-                        for key in optim_class_dict:
-                            if key == 'epochs': epochs_class = 0
-                            else:
-                                param_class[key] = 0
-                        action = rl_agent.post_proc_model(optim_class, epochs_class, param_class)
-                        action_raw = (optim_class, epochs_class, param_class)
-                        action_raw[2]['epochs'] = action_raw[1]
-                        action_raw = (action_raw[0], action_raw[2])
+                    #     for key in optim_class_dict:
+                    #         if key == 'epochs': epochs_class = 0
+                    #         else:
+                    #             param_class[key] = 0
+                    #     action = rl_agent.post_proc_model(optim_class, epochs_class, param_class)
+                    #     action_raw = (optim_class, epochs_class, param_class)
+                    #     action_raw[2]['epochs'] = action_raw[1]
+                    #     action_raw = (action_raw[0], action_raw[2])
                     
 
                     # action_raw = tupe_dqn_class[dqn_class]

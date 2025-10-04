@@ -276,6 +276,8 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         "exp": experiment,
     }
 
+    experiment.log_parameters(rl_agent_params)
+
     model.train(optimizer,
                 5e5,
                 save_model=True,
