@@ -433,7 +433,7 @@ class Model():
             # rl_agent.n_transitions_reinit = 1000
             # rl_agent.replay_buffer = PrioritizedReplayBuffer(rl_agent_params["rl_buffer_size"])
 
-            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=15)
+            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=17)
 
             while n_steps < n_steps_max:
 
