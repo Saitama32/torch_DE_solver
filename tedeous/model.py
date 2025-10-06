@@ -23,6 +23,7 @@ from tedeous.rl_environment import EnvRLOptimizer
 import os
 
 from tedeous.RL_utils.load_exps_from_comet import collect_all_comet_transitions
+from tedeous.RL_utils.load_model_from_comet import load_rl_agent_from_comet
 
 
 # import random, math
@@ -433,7 +434,10 @@ class Model():
             # rl_agent.n_transitions_reinit = 1000
             # rl_agent.replay_buffer = PrioritizedReplayBuffer(rl_agent_params["rl_buffer_size"])
 
-            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=17)
+            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=1)
+            optim_state, params_state = load_rl_agent_from_comet(map_location=device_type())
+            rl_agent.model_optim.load_state_dict(optim_state)
+            rl_agent.model_params.load_state_dict(params_state)
 
             while n_steps < n_steps_max:
 

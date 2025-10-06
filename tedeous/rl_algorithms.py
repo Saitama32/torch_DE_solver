@@ -16,7 +16,7 @@ from tedeous.DQN_classes import DQN_optim, DQN_params
 from comet_ml.integration.pytorch import watch
 from tedeous.RL_utils.per_buffer import PrioritizedReplayBuffer, Transition
 from tedeous.RL_utils.per_offline import recalc_all_priorities_batched
-from tedeous.RL_utils.logging import log_priority_to_comet
+from tedeous.RL_utils.logger import log_priority_to_comet
 
 
 import tempfile

@@ -30,25 +30,40 @@ def get_end_time(exp):
     return datetime.min
 
 
+def get_duration_hours(exp):
+    """Возвращает длительность эксперимента в часах."""
+    start_ms = get_metadata_field(exp, "startTimeMillis", 0)
+    end_ms = get_metadata_field(exp, "endTimeMillis", 0)
+    if not start_ms or not end_ms:
+        return 0.0
+    duration_h = (end_ms - start_ms) / (1000 * 60 * 60)
+    return duration_h
+
+
 def is_crashed(exp):
     return get_metadata_field(exp, "hasCrashed", False) is True
 
 
 # === Основная функция ===
-def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10) -> PrioritizedReplayBuffer:
+def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1) -> PrioritizedReplayBuffer:
     """Собирает все переходы из не-crashed экспериментов проекта и возвращает заполненный PrioritizedReplayBuffer."""
     print("🔍 Получаем эксперименты из Comet...")
     experiments = list(api.get_experiments(workspace=WORKSPACE, project_name=PROJECT_NAME))
-    experiments_sorted = sorted(experiments, key=get_end_time, reverse=True)
+    valid_experiments = [exp for exp in experiments if not is_crashed(exp)]
+    experiments_sorted = sorted(valid_experiments, key=get_end_time, reverse=True)
+    experiments_sorted_duration = [
+        exp for exp in experiments_sorted
+        if get_duration_hours(exp) >= duration_grater_hours
+    ]
     # experiments_sorted = [api.get_experiment(workspace=WORKSPACE, project_name=PROJECT_NAME, experiment='751c7ca595dd4dafb22a0cfe61c26b6f')]
-    valid_experiments = [exp for exp in experiments_sorted if not is_crashed(exp)]
-    valid_experiments = valid_experiments[:max_exps_last]
 
-    print(f"✅ Найдено {len(valid_experiments)} активных экспериментов для загрузки буферов.\n")
+    experiments_sorted_duration = experiments_sorted_duration[:max_exps_last]
+
+    print(f"✅ Найдено {len(experiments_sorted_duration)} активных экспериментов для загрузки буферов.\n")
 
     all_transitions = []  # сюда соберём всё
 
-    for i, exp in enumerate(valid_experiments, 1):
+    for i, exp in enumerate(experiments_sorted_duration, 1):
         meta = exp.get_metadata()
         exp_id = meta.get("experimentKey")
         exp_name = meta.get("experimentName")
@@ -85,7 +100,7 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10) -> Prior
             except Exception as e:
                 print(f"   ❌ Ошибка при чтении {filename}: {e}")
 
-    print(f"\n🚀 Всего собрано {len(all_transitions)} переходов из {len(valid_experiments)} экспериментов.")
+    print(f"\n🚀 Всего собрано {len(all_transitions)} переходов из {len(experiments_sorted_duration)} экспериментов.")
     if not all_transitions:
         print("⚠️ Не найдено переходов для загрузки — возвращаем пустой буфер.")
         return PrioritizedReplayBuffer(capacity=1)
@@ -97,8 +112,8 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10) -> Prior
     return replay_buffer
 
 
-# === Точка входа ===
-if __name__ == "__main__":
-    buffer = collect_all_comet_transitions(PrioritizedReplayBuffer(capacity=100000))
-    # torch.save(buffer.memory, "merged_replay_buffer.pt")
-    # print("💾 Буфер сохранён в merged_replay_buffer.pt")
+# # === Точка входа ===
+# if __name__ == "__main__":
+#     buffer = collect_all_comet_transitions(PrioritizedReplayBuffer(capacity=100000), 32)
+#     # torch.save(buffer.memory, "merged_replay_buffer.pt")
+#     # print("💾 Буфер сохранён в merged_replay_buffer.pt")
