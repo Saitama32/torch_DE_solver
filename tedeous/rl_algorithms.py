@@ -16,6 +16,7 @@ from tedeous.DQN_classes import DQN_optim, DQN_params
 from comet_ml.integration.pytorch import watch
 from tedeous.RL_utils.per_buffer import PrioritizedReplayBuffer, Transition
 from tedeous.RL_utils.per_offline import recalc_all_priorities_batched
+from tedeous.RL_utils.logging import log_priority_to_comet
 
 
 import tempfile
@@ -328,7 +329,9 @@ class DQNAgent:
             self.exp.log_metric("count_good_end", count_good_end, step=self.steps_done)
             self.exp.log_metric("count_bad_end", count_bad_end, step=self.steps_done)
             # Логируем список приоритетов
-            self.exp.log_parameter('priority', self.replay_buffer.prior)
+
+            log_priority_to_comet(self.exp, self.replay_buffer.prior, step=self.steps_done)
+            # self.exp.log_parameter('priority', self.replay_buffer.prior)
 
 
 
