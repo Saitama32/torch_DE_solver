@@ -114,6 +114,6 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
 
 # # === Точка входа ===
 # if __name__ == "__main__":
-#     buffer = collect_all_comet_transitions(PrioritizedReplayBuffer(capacity=100000), 32)
+#     buffer = collect_all_comet_transitions(PrioritizedReplayBuffer(capacity=100000), 100)
 #     # torch.save(buffer.memory, "merged_replay_buffer.pt")
 #     # print("💾 Буфер сохранён в merged_replay_buffer.pt")

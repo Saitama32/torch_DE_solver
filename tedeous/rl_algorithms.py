@@ -23,7 +23,7 @@ import tempfile
 
 
 GAMMA = 0.95
-EPS_START = 0.95
+EPS_START = 0.3
 EPS_END = 0.05
 EPS_DECAY = 1000
 TAU = 0.01
@@ -32,7 +32,7 @@ TAU = 0.01
 class DQNAgent:
     def __init__(self, n_observation=None, n_action=None, optimizer_dict=None, lr=1e-3, gamma=0.95, epsilon=1.0,
                  epsilon_decay=0.995, epsilon_min=0.01, memory_size=10000, batch_size=128, n_transitions_reinit = 2000, per_alpha =  0.6, per_beta0 = 0.4, device='cpu', exp=None,
-                 warmup_updates: int = 50, recalc_batch_size: int = 32,):
+                 warmup_updates: int = 0, recalc_batch_size: int = 32,):
         self.n_observation = n_observation
         self.n_action = n_action
         self.gamma = gamma
@@ -51,6 +51,10 @@ class DQNAgent:
         self.i2params = {k: v for v, k in enumerate(uniq_params)}
         self.huberloss = nn.HuberLoss(reduction='none')
         self.opt_step = 0
+
+        # e - greedly 
+        self.slot_bootstrap_steps = 20     # первые N шагов нового запуска делаем повышенное ε
+        self.slot_bootstrap_eps = 0.5
 
         # PER
         self.per_alpha = per_alpha
@@ -406,6 +410,8 @@ class DQNAgent:
             self.steps_done += 1
             # sample = 0.5 # hardcoded for testing purposes
             # eps_threshold = 1 # hardcoded for testing purposes
+            if self.steps_done < self.slot_bootstrap_steps:
+                eps_threshold = self.slot_bootstrap_eps
             if sample > eps_threshold:
                 with torch.no_grad():
                     # t.max(1) will return the largest column value of each row.
