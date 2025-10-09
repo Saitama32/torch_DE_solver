@@ -72,6 +72,18 @@ class DQNAgent:
 
         self.device = device
         self.exp = exp
+        epsilon_and_warmap_params = {
+            "slot_bootstrap_steps": self.slot_bootstrap_steps,
+            "slot_bootstrap_eps": self.slot_bootstrap_eps,
+            "warmup_updates": warmup_updates,
+            "recalc_batch_size": recalc_batch_size,
+            "EPS_START": EPS_START,
+            "EPS_END": EPS_END,
+            "EPS_DECAY": EPS_DECAY,
+            "TAU": TAU
+        }
+
+        self.exp.log_parameters(epsilon_and_warmap_params)
 
         self.model_optim = DQN_optim(len(self.i2opt)).to(device)
         self.model_params = DQN_params(self.optimizer_dict).to(device)
