@@ -287,18 +287,18 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
     experiment.log_parameters(rl_agent_params)
     experiment.log_parameters(comparison_params)
 
-    # model.train(optimizer,
-    #             5e5,
-    #             save_model=True,
-    #             callbacks=[cb_es],
-    #             rl_agent_params=rl_agent_params,
-    #             models_concat_flag=False,
-    #             model_name='rl_optimization_agent',
-    #             equation_params=equation_params,
-    #             AE_model_params=AE_model_params,
-    #             AE_train_params=AE_train_params,
-    #             loss_surface_params=loss_surface_params,
-    #             comparison_param=comparison_params)
+    model.train(optimizer,
+                5e5,
+                save_model=True,
+                callbacks=[cb_es],
+                rl_agent_params=rl_agent_params,
+                models_concat_flag=False,
+                model_name='rl_optimization_agent',
+                equation_params=equation_params,
+                AE_model_params=AE_model_params,
+                AE_train_params=AE_train_params,
+                loss_surface_params=loss_surface_params,
+                comparison_param=comparison_params)
     
     x = torch.linspace(0, 1, x_res)    # сетка по x
 
