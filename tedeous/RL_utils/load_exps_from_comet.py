@@ -90,7 +90,6 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
 
         for asset in pt_assets:
             filename = asset["fileName"]
-            print(asset)
 
             try:
                 file_bytes = exp.get_asset(asset["assetId"], return_type="binary")
@@ -126,7 +125,7 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
 
 
 # === Точка входа ===
-if __name__ == "__main__":
+# if __name__ == "__main__":
     # buffer = collect_all_comet_transitions(PrioritizedReplayBuffer(capacity=100000), 1)
     # torch.save(buffer.memory, "merged_replay_buffer.pt")
     # print("💾 Буфер сохранён в merged_replay_buffer.pt")
