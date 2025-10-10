@@ -819,8 +819,6 @@ class Model():
             self.net = net
             print('saved best model with loss: ', loss)
 
-
-
         if isinstance(optimizer, list):
             optimizers_chain = optimizer.copy()
             for i_opt in range(len(optimizers_chain)):
