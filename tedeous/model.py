@@ -830,7 +830,6 @@ class Model():
                 
             
             optimizer = dict()
-            self.net = net
             print('saved best model with loss: ', loss)
 
         if isinstance(optimizer, list):
@@ -855,5 +854,3 @@ class Model():
             execute_training_phase(epochs)
 
         callbacks.on_train_end()
-
-        self._model_save(save_model, model_name)
