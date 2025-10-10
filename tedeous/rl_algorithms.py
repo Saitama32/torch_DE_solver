@@ -549,8 +549,8 @@ class DQNAgent:
             eps_threshold = EPS_END + (EPS_START - EPS_END) * \
                             math.exp(-1. * self.steps_done / EPS_DECAY)
             self.steps_done += 1
-            # sample = 0.5 # hardcoded for testing purposes
-            # eps_threshold = 1 # hardcoded for testing purposes
+            sample = 0.5 # hardcoded for testing purposes
+            eps_threshold = 1 # hardcoded for testing purposes
             if self.steps_done < self.slot_bootstrap_steps:
                 eps_threshold = self.slot_bootstrap_eps
             if sample > eps_threshold:
