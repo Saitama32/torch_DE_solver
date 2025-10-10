@@ -63,3 +63,59 @@ class PrioritizedReplayBuffer:
     def update_priorities(self, idxs, new_p):
         for i, p in zip(idxs.tolist(), new_p.tolist()):
             self.prior[int(i)] = float(max(p, self.eps))
+    
+    # per_buffer.py  --- ДОБАВИТЬ внутрь класса PrioritizedReplayBuffer
+    def _build_sequence_from_start(self, start_idx: int, L: int):
+        """
+        Собираем переходы [start_idx .. start_idx+L-1], обрываем на done
+        и не даём вылезти за конец буфера. Без циклического wrap-around.
+        """
+        seq = []
+        i = start_idx
+        N = len(self.memory)
+        steps = 0
+        while i < N and steps < L:
+            tr = self.memory[i]
+            seq.append(tr)
+            steps += 1
+            # если эпизод закончился — выходим (не включаем следующий)
+            if getattr(tr, "done", 0) != 0:
+                break
+            i += 1
+        return seq
+
+    def sample_sequences(self, batch_size: int, L: int, beta=None, uniform=False, device='cpu'):
+        """
+        Возвращает:
+        - seqs: list[list[Transition]] длиной B, каждая — последовательность длиной ≤L,
+        - idxs: Tensor[B] стартовых индексов (их и обновляем в update_priorities),
+        - is_w: Tensor[B] importance-sampling веса.
+        """
+        N = len(self.memory)
+        if N == 0:
+            raise RuntimeError("Buffer is empty")
+
+        # --- выбор стартовых индексов ---
+        if uniform:
+            # равномерно
+            idxs = torch.randint(0, N, (batch_size,), device=device)
+            is_w = torch.ones(batch_size, dtype=torch.float, device=device)
+        else:
+            # PER по стартовым элементам
+            pr = torch.tensor(self.prior, dtype=torch.float, device=device)
+            probs = (pr + self.eps) ** self.alpha
+            probs = probs / probs.sum()
+
+            replacement = N < batch_size
+            idxs = torch.multinomial(probs, batch_size, replacement=replacement)
+
+            # IS-веса по стартовой точке (классика PER)
+            assert beta is not None, "beta must be provided for PER sampling"
+            weights = (N * probs[idxs]).pow(-beta)
+            is_w = (weights / weights.max()).float()
+
+        # --- сбор последовательностей ---
+        seqs = [ self._build_sequence_from_start(int(i), L) for i in idxs.tolist() ]
+
+        return seqs, idxs, is_w
+

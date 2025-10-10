@@ -70,7 +70,19 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
         print(f"[{i:2d}] {exp_name} ({exp_id})")
 
         assets = exp.get_asset_list()
+        # --- фильтруем и сортируем по step ---
         pt_assets = [a for a in assets if a["fileName"].endswith(".pt") and "entry_step" in a["fileName"]]
+
+        def get_step(asset):
+            if "step" in asset and isinstance(asset["step"], (int, float)):
+                return int(asset["step"])
+            fname = asset.get("fileName", "")
+            try:
+                return int(fname.split("entry_step_")[-1].split(".")[0])
+            except Exception:
+                return 0
+
+        pt_assets = sorted(pt_assets, key=get_step)
 
         if not pt_assets:
             print("   ⚠️ Нет файлов entry_step_*.pt — пропускаем.")
@@ -78,6 +90,7 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
 
         for asset in pt_assets:
             filename = asset["fileName"]
+            print(asset)
 
             try:
                 file_bytes = exp.get_asset(asset["assetId"], return_type="binary")
@@ -112,8 +125,19 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
     return replay_buffer
 
 
-# # === Точка входа ===
-# if __name__ == "__main__":
-#     buffer = collect_all_comet_transitions(PrioritizedReplayBuffer(capacity=100000), 100)
-#     # torch.save(buffer.memory, "merged_replay_buffer.pt")
-#     # print("💾 Буфер сохранён в merged_replay_buffer.pt")
+# === Точка входа ===
+if __name__ == "__main__":
+    # buffer = collect_all_comet_transitions(PrioritizedReplayBuffer(capacity=100000), 1)
+    # torch.save(buffer.memory, "merged_replay_buffer.pt")
+    # print("💾 Буфер сохранён в merged_replay_buffer.pt")
+    # exp = api.get_experiment(workspace=WORKSPACE, project_name=PROJECT_NAME, experiment='751c7ca595dd4dafb22a0cfe61c26b6f')
+    # meta = exp.get_metadata()
+    # exp_id = meta.get("experimentKey")
+    # exp_name = meta.get("experimentName")
+
+    # assets = exp.get_asset_list()
+    # pt_assets = [a for a in assets if a["fileName"].endswith(".pt") and "entry_step" in a["fileName"]]
+
+    # for asset in pt_assets:
+    #     filename = asset["fileName"]
+    #     print(asset)

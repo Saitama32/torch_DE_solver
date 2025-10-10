@@ -56,6 +56,17 @@ class DQNAgent:
         self.slot_bootstrap_steps = 20     # первые N шагов нового запуска делаем повышенное ε
         self.slot_bootstrap_eps = 0.7
 
+        # TD
+        self.lambda_ = 0.9     # λ
+        self.kappa  = 0.5      # tolerance κ (0=жёсткий Watkins)
+        self.seq_len = 4   
+
+        # ---- Trust-region гиперпараметры ----
+        self.tr_alpha = 2.0         # ширина «бокса» в σ TD-ошибки (2.0–3.0 ок)
+        self.tr_eps   = 1e-6        # численная защита
+        self.tr_mom   = 0.99        # EMA для бегущего std TD-ошибки
+        self.td_running_std = 0.0   # буфер EMA(std(|δ|)) по батчам
+
         # PER
         self.per_alpha = per_alpha
         self.per_beta  = per_beta0
@@ -158,6 +169,60 @@ class DQNAgent:
     #     for transition in buffer.memory:
     #         clean_buffer.push(*self.detach_transition(transition))
     #     return clean_buffer
+
+    def _sample_sequences(self, batch_size, L, uniform: bool, beta=None):
+        rb = self.replay_buffer
+        # всегда используем нативный метод из буфера
+        if uniform:
+            seqs, idxs, is_w = rb.sample_sequences(batch_size, L, beta=None, uniform=True, device=self.device)
+        else:
+            seqs, idxs, is_w = rb.sample_sequences(batch_size, L, beta=beta, uniform=False, device=self.device)
+        return seqs, idxs, is_w
+    
+
+    def _greedy_mask(self, s_batch, a_batch):
+    # s_batch: Tensor[B, ..., 26,26], a_batch: LongTensor[B]
+        with torch.no_grad():
+            _, q_all = self.model_optim(s_batch)       # [B, A]
+            a_star = q_all.argmax(dim=1)               # [B]
+        return (a_batch == a_star)                     # [B] bool
+
+    def _soft_watkins_targets(self, seq, gamma):
+        states      = torch.stack([self._stack_state(tr.state)      for tr in seq])
+        next_states = torch.stack([self._stack_state(tr.next_state) for tr in seq])
+        actions     = torch.tensor([tr.action[0] for tr in seq], dtype=torch.long, device=self.device)
+        rewards     = torch.tensor([tr.reward   for tr in seq], dtype=torch.float, device=self.device)
+        dones       = torch.tensor([(tr.done!=0) for tr in seq], dtype=torch.bool, device=self.device)
+
+        # --- ПРАВИЛЬНОЕ накапливание G^{(n)} ---
+        Gn = []
+        ret = torch.zeros((), device=self.device)
+        pow_ = torch.tensor(1.0, device=self.device)            # = γ^0 на старте
+        for n in range(len(seq)):                               # n=0..N-1  => (n+1)-step
+            ret = ret + pow_ * rewards[n]                       # += γ^n * r_{t+1+n}
+            if not dones[n]:
+                with torch.no_grad():
+                    _, q_on_next  = self.model_optim(next_states[n:n+1])
+                    a_star        = q_on_next.argmax(dim=1)
+                    _, q_tg_next  = self.target_model_optim(next_states[n:n+1])
+                    boot = q_tg_next.gather(1, a_star.view(-1,1)).squeeze()  
+            else:
+                boot = torch.zeros((), device=self.device)
+            Gn.append(ret + (pow_ * gamma) * boot)              # + γ^{n+1} * boot
+            pow_ = pow_ * gamma                                 # γ^{n+1} к следующему шагу
+
+        greedy_mask = self._greedy_mask(states, actions)
+        g_vals = torch.where(greedy_mask, torch.ones_like(rewards), torch.full_like(rewards, self.kappa))
+        G_lambda = torch.zeros((), device=self.device)
+        g_prefix = 1.0
+        for n in range(len(seq)):  # n=0..N-1  => (n+1)-step
+            if n > 0:
+                # включаем g для шага t+(n-1) — т.е. для промежуточных шагов после текущего
+                g_prefix = g_prefix * g_vals[n-1]
+            w_n = (1.0 - self.lambda_) * (self.lambda_ ** n) * g_prefix
+            G_lambda = G_lambda + w_n * Gn[n]
+        return G_lambda.detach()
+
     
     def optim_(self, iters=1):
         """
@@ -176,15 +241,21 @@ class DQNAgent:
                 break
 
             if self.warmup_active:
-                batch, idxs, is_w = self.replay_buffer.sample_uniform(self.batch_size, device=self.device)
-                is_w = is_w.to(self.device)  # все единицы
+                seqs, idxs, is_w = self._sample_sequences(self.batch_size, self.seq_len, uniform=True, beta=None)
+                is_w = is_w.to(self.device)           # единицы
             else:
-                batch, idxs, is_w = self.replay_buffer.sample(self.batch_size, beta=self.per_beta, device=self.device)
+                seqs, idxs, is_w = self._sample_sequences(self.batch_size, self.seq_len, uniform=False, beta=self.per_beta)
                 self.per_beta = min(1.0, self.per_beta + self.per_beta_inc)
                 is_w = is_w.to(self.device)
 
-            state, next_state, action, reward, done, model_reward, opt_model_i = zip(*batch)
-            B = len(batch)
+            first_trs = [seq[0] for seq in seqs]
+
+            state, next_state, action, reward, done, model_reward, opt_model_i = zip(*[
+                (tr.state, tr.next_state, tr.action, tr.reward, tr.done, tr.model_reward, tr.opt_model_i)
+                for tr in first_trs
+            ])
+
+            B = len(first_trs)
 
             state  = torch.stack([self._stack_state(s)  for s in state])      # (B,2,26,26)
             next_state = torch.stack([self._stack_state(s2) for s2 in next_state])
@@ -195,20 +266,47 @@ class DQNAgent:
             model_reward = torch.FloatTensor(model_reward).to(self.device)
             opt_model_i = torch.IntTensor(opt_model_i).to(self.device)
 
-            # --- OPTIMIZER HEAD: Double DQN ---
-            flat, q_opt_cur = self.model_optim(state)                         # (B,A)
-            q_sa = q_opt_cur.gather(1, action_o.view(-1,1)).squeeze(1)          # (B,)
+            # --- OPTIMIZER HEAD: текущие Q(s_t,a_t)
+            flat, q_opt_cur = self.model_optim(state)
+            q_sa = q_opt_cur.gather(1, action_o.view(-1,1)).squeeze(1)
 
+            # --- SOFT/WATKINS G^{λ,κ} на каждый элемент батча из своей последовательности ---
             with torch.no_grad():
-                _, q_opt_next_online = self.model_optim(next_state)               # (B,A)
-                a_next = q_opt_next_online.argmax(dim=1)                   # (B,)
-                _, q_opt_next_target = self.target_model_optim(next_state)        # (B,A)
-                q_next = q_opt_next_target.gather(1, a_next.view(-1,1)).squeeze(1)
-                y_opt  = reward + (1.0 - done) * self.gamma * q_next
+                y_opt_list = [ self._soft_watkins_targets(seq, self.gamma) for seq in seqs ]
+            y_opt = torch.stack(y_opt_list, dim=0)   # [B]
+
+            
+
+            #Функционал trust region 
+
+            # --- TD-ошибка для головы оптимизатора (на λ-таргете) ---
+            delta = (y_opt - q_sa).detach()                           # [B]
+
+            # --- оценка σ: берём max(batch_std, running_EMA, eps) ---
+            sigma_batch = delta.std().clamp_min(self.tr_eps).item()
+            self.td_running_std = self.tr_mom * self.td_running_std + (1.0 - self.tr_mom) * sigma_batch
+            sigma = max(sigma_batch, self.td_running_std, self.tr_eps)
+            sigma_t = torch.full_like(q_sa, fill_value=sigma)         # [B], на девайсе
+
+            # --- разность между online и target на ТЕКУЩЕМ (s_t, a_t) ---
+            with torch.no_grad():
+                _, q_opt_tgt_cur = self.target_model_optim(state)     # [B, A]
+            q_tgt_sa = q_opt_tgt_cur.gather(1, action_o.view(-1,1)).squeeze(1)  # [B]
+            gap = (q_sa.detach() - q_tgt_sa)                          # [B]
+
+            # --- два условия маски (True => выкинуть из лосса) ---
+            cond1 = gap.abs() > (self.tr_alpha * sigma_t)             # далеко от таргет-значения
+            cond2 = torch.sign(gap) != torch.sign(q_sa.detach() - y_opt.detach())  # шаг уведёт ЕЩЁ дальше
+            tr_mask_drop = cond1 & cond2                              # [B] bool
+            tr_keep = (~tr_mask_drop).float()                         # [B] 1.0 = учим, 0.0 = выкинуть
+
+            # --- применяем маску к лоссу оптимизаторной головы ---
+            per_sample_loss_opt = self.huberloss(input=q_sa, target=y_opt) * is_w
+            loss_opt = (per_sample_loss_opt * tr_keep).sum() / tr_keep.sum().clamp_min(1.0)
+
 
             td_opt_abs = (q_sa - y_opt).abs().detach()
-            # loss_opt = (nn.functional.huber_loss(q_sa, y_opt, reduction='none') * is_w).mean()
-            loss_opt = (self.huberloss(input=q_sa, target=y_opt) * is_w).mean()
+            td_opt_abs = td_opt_abs * tr_keep + self.tr_eps  
 
             # --- PARAM HEADS: Double per-parameter ---
             opt_names = [self.i2opt[int(i.item())] for i in action_o]
@@ -232,12 +330,12 @@ class DQNAgent:
 
                     # lp = nn.functional.huber_loss(q_curr, y_p, reduction='none') * is_w[i]
                     lp = self.huberloss(input=q_curr, target=y_p) * is_w[i]
-                    lp_sum = lp_sum + lp
+                    lp_sum = lp_sum + (lp * tr_keep[i])
                     td_sum += float((q_curr - y_p).abs().item())
                 loss_param_items.append(lp_sum)
                 td_param_items.append(td_sum)
 
-            loss_param = torch.stack(loss_param_items).mean()
+            loss_param = torch.stack(loss_param_items).sum() / tr_keep.sum().clamp_min(1.0)
 
             # --- шаг оптимизации ---
             self.optimizer_opt.zero_grad()
@@ -283,6 +381,26 @@ class DQNAgent:
             all_dones.append(done_raw.detach().cpu())
 
             model_reward_i_ar += model_reward[(opt_model_i == self.opt_step).nonzero()].reshape(-1).tolist()
+
+
+            dropped  = int(tr_mask_drop.sum().item())
+            kept     = int(tr_keep.sum().item())
+            drop_frac = dropped / max(dropped + kept, 1)
+
+            delta_raw = (y_opt - q_sa).detach()
+            mean_abs_delta = delta_raw.abs().mean().item()
+
+            lens = [len(seq) for seq in seqs]
+            frac_len_gt1 = sum(l > 1 for l in lens) / max(len(lens), 1)
+            avg_len = (sum(lens) / max(len(lens), 1))
+
+
+            self.exp.log_metrics({
+                "tr_drop_frac": drop_frac,
+                "mean_abs_delta": mean_abs_delta,
+                "seq_frac_len_gt1": frac_len_gt1,
+                "seq_avg_len": avg_len,
+            }, step=self.steps_done)
 
 
         self.opt_step += 1
