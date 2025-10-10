@@ -207,7 +207,8 @@ class Model():
               equation_params: list = None,
               AE_model_params: dict = None,
               AE_train_params: dict = None,
-              loss_surface_params: dict = None):
+              loss_surface_params: dict = None,
+              comparison_param: dict=None):
         """ train model.
 
         Args:
@@ -325,7 +326,7 @@ class Model():
                     return None, self.saved_models
                 return loss_history[-1], self.saved_models
 
-        if rl_agent_params:
+        if rl_agent_params and comparison_param is None:
             env = EnvRLOptimizer(optimizer,
                                  equation_params=equation_params,
                                  callbacks=callbacks,
@@ -674,6 +675,151 @@ class Model():
                     idx_traj += 1
 
             # self.net = rl_agent.model  #неправилно
+
+        if rl_agent_params and comparison_param:
+            print('Comparison')
+            env = EnvRLOptimizer(optimizer,
+                                 equation_params=equation_params,
+                                 callbacks=callbacks,
+                                 AE_model_params=AE_model_params,
+                                 AE_train_params=AE_train_params,
+                                 loss_surface_params=loss_surface_params,
+                                 n_save_models=rl_agent_params['n_save_models'],
+                                 tolerance=rl_agent_params["tolerance"])
+
+            # These objects must be created after the first optimizer is started
+            n_observation = env.observation_space
+            # state_dim = np.prod(env.observation_space.shape)
+            n_action = env.action_space
+
+            rl_agent = DQNAgent(n_observation,
+                                n_action,
+                                optimizer_dict=optimizer,
+                                memory_size=rl_agent_params["rl_buffer_size"],
+                                gamma=rl_agent_params["gamma"],
+                                lr=rl_agent_params["lr"],
+                                device=device_type(),
+                                batch_size=rl_agent_params["rl_batch_size"],
+                                n_transitions_reinit = rl_agent_params["n_transitions_reinit"],
+                                exp = rl_agent_params["exp"])
+
+            state_shape = get_state_shape(loss_surface_params)
+            done = 0
+
+            grid = self.domain.build('NN').to(device_type())
+            variable_dict = self.domain.variable_dict
+            bconds = self.conditions.build(variable_dict)
+
+            optimizer_epoch = 0
+            i = 0
+            n_steps = 1
+            with torch.no_grad():
+                self.net.apply(self.reinit_weights)
+            # self.solution_cls._model_change(self.net)
+
+            self.solution_cls = Solution(self.grid, self.equation_cls, self.net, self.mode, self.weak_form,
+                                    self.lambda_operator, self.lambda_bound, self.tol, self.derivative_points,
+                                    batch_size=self.batch_size)
+            
+            self.t = 1
+            callbacks.set_model(self)
+
+            # state = torch init -> AE_model
+            callbacks.callbacks[0]._stop_dings = 0
+            total_reward = 0
+            optimizers_history = []
+            prev_reward = -1
+            state = {"loss_total": torch.zeros(state_shape),
+                        "loss_oper": torch.zeros(state_shape),
+                        "loss_bnd": torch.zeros(state_shape)}
+            
+            optim_state, params_state = load_rl_agent_from_comet(comparison_param["experiment_key"], map_location=device_type())
+            rl_agent.model_optim.load_state_dict(optim_state)
+            rl_agent.model_params.load_state_dict(params_state)
+
+            while comparison_param["total_epochs"] - optimizer_epoch > 0 and not self.stop_training:
+
+                action, action_raw, is_model = rl_agent.select_action(state)
+                action_raw[2]['epochs'] = action_raw[1]
+                optimizer_epoch += action['epochs']
+                action_raw = (action_raw[0], action_raw[2])
+                n_steps += 1
+
+            
+                if is_model:
+                    print("Action by model")
+                else:
+                    print("Action by epsilon-greedy")
+                print(f"\naction = {action}")
+
+                if action['type'] == "LBFGS":
+                    action['params']['line_search_fn'] = 'strong_wolfe'
+                optimizer = Optimizer(action['type'], action['params'])
+                self.optimizer = optimizer.optimizer_choice(self.mode, self.net)
+                closure = Closure(mixed_precision, self).get_closure(optimizer.optimizer)
+                self.t = 1
+
+                print('\n===========================================================================\n' +
+                        f'\nRL agent training: step {i + 1}.'
+                        f'\nTime: {datetime.datetime.now()}.'
+                        f'\nUsing optimizer: {action["type"]} for {action["epochs"]} epochs.'
+                        f'\nTotal Reward = {total_reward}.\n')
+
+                loss, solver_models = execute_training_phase(
+                    action["epochs"],
+                    n_save_models=rl_agent_params['n_save_models'],
+                    stuck_threshold=rl_agent_params['stuck_threshold']
+                )
+
+                env.rl_penalty = self.rl_penalty
+
+                if solver_models is None:
+                    print("Solver models are None!!!")
+
+                if len(solver_models) < rl_agent_params['n_save_models']:
+                    print(f"Current number of solver models: {len(solver_models)}. "
+                            f"\nRight number = {rl_agent_params['n_save_models']}")
+
+                net = self.net.to(device_type())
+
+                if callable(rl_agent_params["exact_solution"]):
+                    operator_rmse = torch.sqrt(
+                        torch.mean((rl_agent_params["exact_solution"](grid).reshape(-1, 1) - net(grid)) ** 2)
+                    )
+                else:
+                    exact = exact_solution_data(grid, rl_agent_params["exact_solution"],
+                                                equation_params[-1][0], equation_params[-1][-1],
+                                                t_dim_flag='t' in list(self.domain.variable_dict.keys()))
+                    net_predicted = net(grid)
+                    operator_rmse = torch.sqrt(torch.mean((exact.reshape(-1, 1) - net_predicted) ** 2))
+
+                boundary_rmse = torch.sum(torch.stack([
+                    torch.sqrt(torch.mean(
+                        (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
+                    ))
+                    for b in bconds
+                ]))
+                
+                print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
+                print(f"Total RMSE: {operator_rmse + boundary_rmse}")
+
+                rl_agent_params['exp'].log_metrics({
+                "operator_rmse": operator_rmse,
+                "boundary_rmse": boundary_rmse,
+                "total_rmse": operator_rmse + boundary_rmse,
+                }, step=n_steps)
+
+                state = next_state
+
+                print(f'\nCurrent reward after {action["type"]} optimizer: {operator_rmse + boundary_rmse}.\n'
+                        f'Chain {", ".join(optimizers_history)} ')
+                
+            
+            optimizer = dict()
+            self.net = net
+            print('saved best model with loss: ', loss)
+
+
 
         if isinstance(optimizer, list):
             optimizers_chain = optimizer.copy()

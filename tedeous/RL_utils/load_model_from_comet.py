@@ -8,10 +8,10 @@ PROJECT_NAME = "rlpinn"
 
 
 api = API(api_key="aP71fQTYPNqfsYWvudPPmoBl5")  # или просто API()
-experiment_key = "f2e79c0aac494c34a07836813fa3951b"
+# experiment_key = "f2e79c0aac494c34a07836813fa3951b"
 step=None
 
-def load_rl_agent_from_comet(map_location: str = "cpu"):
+def load_rl_agent_from_comet(experiment_key, map_location: str = "cpu"):
     """
     Загружает веса RL-агента (model_optim и model_params) из эксперимента Comet ML.
     
