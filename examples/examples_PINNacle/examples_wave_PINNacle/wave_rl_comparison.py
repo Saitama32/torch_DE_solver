@@ -51,7 +51,7 @@ def exact_func(grid, beta=5):
     x, t = grid[:, 0], grid[:, 1]
     sln = torch.sin(np.pi * x) * torch.cos(2 * np.pi * t) + 0.5 * \
           torch.sin(beta * np.pi * x) * torch.cos(2 * beta * np.pi * t)
-    return sln
+    return sln.to(device)
 
 def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
     exp_dict_list = []
