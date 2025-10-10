@@ -139,9 +139,9 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
         print("Использую", torch.cuda.device_count(), "GPU!")
         net = torch.nn.DataParallel(net)
 
-    net = net.cuda()
+    net = net.to(device)
 
-    grid_test = torch.cartesian_prod(torch.linspace(0, 1, 100), torch.linspace(0, 1, 100))
+    grid_test = torch.cartesian_prod(torch.linspace(0, 1, 100), torch.linspace(0, 1, 100)).to(device)
     model = Model(net, domain, equation, boundaries)
     model_layers = [pde_dim_in, neurons, neurons, neurons, pde_dim_out]
 
@@ -287,29 +287,29 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
     experiment.log_parameters(rl_agent_params)
     experiment.log_parameters(comparison_params)
 
-    model.train(optimizer,
-                5e5,
-                save_model=True,
-                callbacks=[cb_es],
-                rl_agent_params=rl_agent_params,
-                models_concat_flag=False,
-                model_name='rl_optimization_agent',
-                equation_params=equation_params,
-                AE_model_params=AE_model_params,
-                AE_train_params=AE_train_params,
-                loss_surface_params=loss_surface_params,
-                comparison_param=comparison_params)
+    # model.train(optimizer,
+    #             5e5,
+    #             save_model=True,
+    #             callbacks=[cb_es],
+    #             rl_agent_params=rl_agent_params,
+    #             models_concat_flag=False,
+    #             model_name='rl_optimization_agent',
+    #             equation_params=equation_params,
+    #             AE_model_params=AE_model_params,
+    #             AE_train_params=AE_train_params,
+    #             loss_surface_params=loss_surface_params,
+    #             comparison_param=comparison_params)
     
     x = torch.linspace(0, 1, x_res)    # сетка по x
 
     grid = torch.cartesian_prod(torch.linspace(0, 1, x_res), torch.linspace(0, 1, t_res)).to(device)
     grid_test = grid_test.to(device)
-    error_op_rmse_train = torch.sqrt(torch.mean((exact_func(grid).reshape(-1, 1) - net(grid)) ** 2))
+    error_op_rmse_train = torch.sqrt(torch.mean((exact_func(grid).reshape(-1, 1) - model.net(grid)) ** 2))
     variable_dict = domain.variable_dict
     bconds = boundaries.build(variable_dict)
     error_bnd_rmse_train = torch.sum(torch.stack([
                         torch.sqrt(torch.mean(
-                            (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
+                            (b["bval"].reshape_as(model.net(b["bnd"])) - model.net(b["bnd"])) ** 2, dtype=torch.float32
                         ))
                         for b in bconds
                     ]))
