@@ -61,6 +61,11 @@ class DQNAgent:
         self.kappa  = 0.5      # tolerance κ (0=жёсткий Watkins)
         self.seq_len = 4   
 
+        # --- TD-нормализация для параметров ---
+        self.param_td_running_std = {}   # dict: key -> EMA(std)
+        self.param_td_mom = 0.99
+        self.param_td_eps = 1e-6
+
         # ---- Trust-region гиперпараметры ----
         self.tr_alpha = 2.0         # ширина «бокса» в σ TD-ошибки (2.0–3.0 ок)
         self.tr_eps   = 1e-6        # численная защита
@@ -275,8 +280,6 @@ class DQNAgent:
                 y_opt_list = [ self._soft_watkins_targets(seq, self.gamma) for seq in seqs ]
             y_opt = torch.stack(y_opt_list, dim=0)   # [B]
 
-            
-
             #Функционал trust region 
 
             # --- TD-ошибка для головы оптимизатора (на λ-таргете) ---
@@ -327,11 +330,19 @@ class DQNAgent:
                     a_next_p   = int(q_next_on.argmax().item())
                     q_next_tg  = q_params_next_tg[i][pname][a_next_p]
                     y_p = reward[i] + (1.0 - done[i]) * self.gamma * q_next_tg
+                    delta_p_raw = (y_p - q_curr).detach()  
 
-                    # lp = nn.functional.huber_loss(q_curr, y_p, reduction='none') * is_w[i]
-                    lp = self.huberloss(input=q_curr, target=y_p) * is_w[i]
+                    sigma_batch_p = float(delta_p_raw.abs().clamp_min(self.param_td_eps).item())
+                    key = (opt_names[i], pname) 
+                    prev = self.param_td_running_std.get(key, sigma_batch_p)
+                    ema  = self.param_td_mom * prev + (1.0 - self.param_td_mom) * sigma_batch_p
+                    self.param_td_running_std[key] = ema
+                    sigma_p = max(ema, sigma_batch_p, self.param_td_eps)
+
+                    delta_p_norm = (y_p - q_curr) / sigma_p
+                    lp = self.huberloss(input=delta_p_norm, target=torch.zeros_like(delta_p_norm)) * is_w[i]
                     lp_sum = lp_sum + (lp * tr_keep[i])
-                    td_sum += float((q_curr - y_p).abs().item())
+                    td_sum += float((q_curr - y_p).abs().item() / sigma_p)
                 loss_param_items.append(lp_sum)
                 td_param_items.append(td_sum)
 
