@@ -302,8 +302,8 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
     
     x = torch.linspace(0, 1, x_res)    # сетка по x
 
-    grid = torch.cartesian_prod(torch.linspace(0, 1, x_res), torch.linspace(0, 1, t_res))
-    
+    grid = torch.cartesian_prod(torch.linspace(0, 1, x_res), torch.linspace(0, 1, t_res)).to(device)
+    grid_test = grid_test.to(device)
     error_op_rmse_train = torch.sqrt(torch.mean((exact_func(grid).reshape(-1, 1) - net(grid)) ** 2))
     variable_dict = domain.variable_dict
     bconds = boundaries.build(variable_dict)
