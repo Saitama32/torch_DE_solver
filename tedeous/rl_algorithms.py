@@ -23,7 +23,7 @@ import tempfile
 
 
 GAMMA = 0.95
-EPS_START = 0.5
+EPS_START = 0.3
 EPS_END = 0.05
 EPS_DECAY = 1000
 TAU = 0.01
@@ -54,7 +54,7 @@ class DQNAgent:
 
         # e - greedly 
         self.slot_bootstrap_steps = 20     # первые N шагов нового запуска делаем повышенное ε
-        self.slot_bootstrap_eps = 0.7
+        self.slot_bootstrap_eps = 0.5
 
         # TD
         self.lambda_ = 0.9     # λ
