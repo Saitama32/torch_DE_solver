@@ -799,6 +799,20 @@ class Model():
                     ))
                     for b in bconds
                 ]))
+
+                env.solver_models = solver_models
+                env.reward_params = {
+                    "operator": {
+                        "error": operator_rmse,
+                        "coeff": rl_agent_params["reward_operator_coeff"]
+                    },
+                    "bconds": {
+                        "error": boundary_rmse,
+                        "coeff": rl_agent_params["reward_boundary_coeff"]
+                    }
+                }
+
+                next_state, reward, done, _ = env.step()
                 
                 print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
                 print(f"Total RMSE: {operator_rmse + boundary_rmse}")
