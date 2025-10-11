@@ -177,7 +177,7 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
         },
         'PSO':{
             'lr':[0.0, 1e-3, 1e-4],
-            'epochs':[100, 200, 300]
+            'epochs':[101, 200, 300]
         },
         # 'NNCG':{
         #     'lr':[1, 5e-1, 1e-1],
@@ -340,7 +340,7 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
     print(f"Train full RMSE: {error_rmse_test_full}, Train op RMSE: {error_op_rmse_test}, Train bnd RMSE: {error_bnd_rmse_test}, L2RE op: {error_l2re_test}")
 
     
-    experiment.log_parameters({
+    experiment.log_metrics({
     "error_op_rmse_train": error_op_rmse_train.item(),
     "error_bnd_rmse_train": error_bnd_rmse_train.item(),
     "error_rmse_train_full": error_rmse_train_full.item(),
@@ -349,7 +349,7 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
     "error_bnd_rmse_test": error_bnd_rmse_test.item(),
     "error_rmse_test_full": error_rmse_test_full.item(),
     "error_l2re_test": error_l2re_test.item()
-    })
+    }, step=seed)
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp_params:
         torch.save(model.net.state_dict(), tmp_params.name)
