@@ -281,7 +281,7 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "9da803bf471942d68069d835e2f95651"
+        "experiment_key": "7eef2a8539884caaab03e61dac561a68"
     }
 
     experiment.log_parameters(rl_agent_params)
