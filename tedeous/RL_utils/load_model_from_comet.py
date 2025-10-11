@@ -40,7 +40,7 @@ def load_rl_agent_from_comet(experiment_key, map_location: str = "cpu"):
     if step is None:
         optim_asset = optim_assets[-1]
         params_asset = params_assets[-1]
-        print(f"⬇️ Загружаем последние версии моделей: step={optim_asset['step']}/{params_asset['step']}")
+        print(f"⬇️ Загружаем последние версии моделей {experiment_key}: step={optim_asset['step']}/{params_asset['step']}")
     else:
         # ищем ближайшие по step
         optim_asset = min(optim_assets, key=lambda a: abs(a.get("step", 0) - step))
