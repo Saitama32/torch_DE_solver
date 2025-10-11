@@ -8,7 +8,7 @@ PROJECT_NAME = "rlpinn"
 
 
 api = API(api_key="aP71fQTYPNqfsYWvudPPmoBl5")  # или просто API()
-experiment_key = "f2e79c0aac494c34a07836813fa3951b"
+experiment_key = "9da803bf471942d68069d835e2f95651"
 step=None
 
 def load_rl_agent_from_comet(map_location: str = "cpu"):
