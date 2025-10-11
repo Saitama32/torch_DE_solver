@@ -167,7 +167,7 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
 
     optim_param = {'history_size': 100,
                     "line_search_fn": 'strong_wolfe',
-                    "lr": 1}
+                    "lr": 0.5}
 
     
     optim = Optimizer('LBFGS', optim_param)
