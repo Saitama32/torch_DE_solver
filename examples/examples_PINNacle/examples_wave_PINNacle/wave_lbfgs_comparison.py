@@ -267,11 +267,6 @@ if __name__ == "__main__":
         np.random.seed(seed)
         random.seed(seed)
 
-        # (опционально, если используешь CUDA)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
         # запуск эксперимента
         exp_dict_list = wave_1d_basic_experiment(seed, x_res, t_res, beta)
 
