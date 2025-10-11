@@ -277,7 +277,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
     }
 
     backup_params = {
-        "experiment_key" : "4ee79b89c2eb4658856e9720cf35a34a",
+        "experiment_key" : "7eef2a8539884caaab03e61dac561a68",
     }
 
     experiment.log_parameters(rl_agent_params)
