@@ -281,7 +281,7 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "fc3ed2699df849bd8bd9a7ae11e7ec83"
+        "experiment_key": "4ee79b89c2eb4658856e9720cf35a34a"
     }
 
     experiment.log_parameters(rl_agent_params)
@@ -373,7 +373,7 @@ if __name__ == "__main__":
     beta = 5
 
     # список сидов для экспериментов
-    seeds = [123, 234, 345, 456, 567]  # можно расширить список
+    seeds = [678, 789, 890, 901, 12]   # можно расширить список
 
     for seed in seeds:
         print(f"\n🔹 Запуск эксперимента с seed = {seed}")
