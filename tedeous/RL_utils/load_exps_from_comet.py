@@ -1,6 +1,6 @@
 from comet_ml import API
 import torch
-import io
+import io, os
 from datetime import datetime
 from tedeous.rl_algorithms import PrioritizedReplayBuffer
 from tedeous.RL_utils.load_transitions_into_buffer_pickle import load_transitions_to_replay_buffer
@@ -45,7 +45,7 @@ def is_crashed(exp):
 
 
 # === Основная функция ===
-def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1) -> PrioritizedReplayBuffer:
+def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None) -> PrioritizedReplayBuffer:
     """Собирает все переходы из не-crashed экспериментов проекта и возвращает заполненный PrioritizedReplayBuffer."""
     print("🔍 Получаем эксперименты из Comet...")
     experiments = list(api.get_experiments(workspace=WORKSPACE, project_name=PROJECT_NAME))
@@ -68,6 +68,10 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
         exp_id = meta.get("experimentKey")
         exp_name = meta.get("experimentName")
         print(f"[{i:2d}] {exp_name} ({exp_id})")
+
+        if save_dir is not None:
+            os.makedirs(save_dir, exist_ok=True)
+            print(f"💾 Сохранение включено — файлы будут сохраняться в {save_dir}")
 
         assets = exp.get_asset_list()
         # --- фильтруем и сортируем по step ---
@@ -95,6 +99,12 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
                 file_bytes = exp.get_asset(asset["assetId"], return_type="binary")
                 buffer_stream = io.BytesIO(file_bytes)
                 data_load = torch.load(buffer_stream, map_location="cpu")
+
+                if save_dir is not None:
+                    safe_name = f"{exp_name}_{filename}".replace("/", "_")
+                    save_path = os.path.join(save_dir, safe_name)
+                    torch.save(data_load, save_path)
+                    print(f"   💾 Сохранено локально: {save_path}")
 
                 if isinstance(data_load, dict):
                     if "memory" in data_load:

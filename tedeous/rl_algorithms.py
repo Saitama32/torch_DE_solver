@@ -98,8 +98,8 @@ class DQNAgent:
             "EPS_DECAY": EPS_DECAY,
             "TAU": TAU
         }
-
-        self.exp.log_parameters(epsilon_and_warmap_params)
+        if self.exp is not None:
+            self.exp.log_parameters(epsilon_and_warmap_params)
 
         self.model_optim = DQN_optim(len(self.i2opt)).to(device)
         self.model_params = DQN_params(self.optimizer_dict).to(device)
