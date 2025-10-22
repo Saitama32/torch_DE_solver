@@ -187,6 +187,10 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
 
     # optimizer = Optimizer('Adam', {'lr': 1e-4})
 
+    log_state = True
+    if log_state:
+        print("🔧 Будет применлено логарифмирование состояний.")
+
     AE_model_params = {
         "mode": "NN",
         "num_of_layers": 3,
@@ -254,7 +258,8 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         "density_vmax": -1,
         "density_vmin": -1,
         "colorFromGridOnly": True,
-        "img_dir": img_dir
+        "img_dir": img_dir,
+        "apply_log_state": log_state
     }
 
     rl_agent_params = {
@@ -273,6 +278,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         "reward_operator_coeff": 1,
         "reward_boundary_coeff": 1,
         "lr": 1e-3,
+        "log_state": log_state,
         "exp": experiment,
     }
 
@@ -281,7 +287,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
     }
 
     experiment.log_parameters(rl_agent_params)
-    experiment.log_parameters(backup_params)
+    # experiment.log_parameters(backup_params)
 
     model.train(optimizer,
                 5e5,

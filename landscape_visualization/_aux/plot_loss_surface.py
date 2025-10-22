@@ -48,7 +48,8 @@ class PlotLossSurface:
                  density_vmax: float = -1,
                  density_vmin: float = -1,
                  colorFromGridOnly: bool = True,
-                 img_dir: str = None
+                 img_dir: str = None,
+                 apply_log_state: bool = False
                  ):
 
         """
@@ -105,6 +106,7 @@ class PlotLossSurface:
         self.density_vmin = density_vmin
         self.colorFromGridOnly = colorFromGridOnly
         self.loss_types = loss_types
+        self.apply_log_state = apply_log_state
         self.latent_dim = 2
         self.img_dir = img_dir
         self.states_dict = {}
@@ -586,6 +588,7 @@ class PlotLossSurface:
             if self.solver_models is None:
                 torch.save(self.states_dict, self.path_to_plot_model_directory + '/loss_surface_data.pt')
             
-            raw_states_dict[loss_type] = raw_state['grid_losses']
+            if self.apply_log_state:
+                raw_states_dict[loss_type] = torch.log(raw_state['grid_losses'])
 
         return raw_states_dict

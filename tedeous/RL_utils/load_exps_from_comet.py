@@ -45,7 +45,7 @@ def is_crashed(exp):
 
 
 # === Основная функция ===
-def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None) -> PrioritizedReplayBuffer:
+def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None, log_scale = True) -> PrioritizedReplayBuffer:
     """Собирает все переходы из не-crashed экспериментов проекта и возвращает заполненный PrioritizedReplayBuffer."""
     print("🔍 Получаем эксперименты из Comet...")
     experiments = list(api.get_experiments(workspace=WORKSPACE, project_name=PROJECT_NAME))
@@ -127,8 +127,10 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
         print("⚠️ Не найдено переходов для загрузки — возвращаем пустой буфер.")
         return PrioritizedReplayBuffer(capacity=1)
 
+    if log_scale:
+        print("🔧 Будет применено логарифмирование состояний.")
     # === Заполняем буфер ===
-    replay_buffer = load_transitions_to_replay_buffer(replay_buffer, all_transitions)
+    replay_buffer = load_transitions_to_replay_buffer(replay_buffer, all_transitions, apply_log=log_scale)
 
     # print(f"\n✅ Финальный буфер содержит {len(replay_buffer)} переходов.")
     return replay_buffer

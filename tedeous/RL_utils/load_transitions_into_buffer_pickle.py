@@ -45,7 +45,26 @@ def to_cpu(obj):
         return t(to_cpu(v) for v in obj)
     return obj
 
-def load_transitions_to_replay_buffer(replay_buffer, source, learn_or_analyze="learn"):
+def log_transform_state(state, safe=True):
+    """
+    Логарифмирует state (torch.Tensor, np.ndarray, dict или список тензоров).
+    safe=True → используется log1p(x) для устойчивости при очень малых значениях.
+    Предполагается, что state > 0.
+    """
+    if torch.is_tensor(state):
+        return torch.log1p(state) if safe else torch.log(state)
+    elif isinstance(state, np.ndarray):
+        return np.log1p(state) if safe else np.log(state)
+    elif isinstance(state, dict):
+        return {k: log_transform_state(v, safe=safe) for k, v in state.items()}
+    elif isinstance(state, (list, tuple)):
+        t = type(state)
+        return t(log_transform_state(v, safe=safe) for v in state)
+    else:
+        return state
+
+
+def load_transitions_to_replay_buffer(replay_buffer, source, learn_or_analyze="learn", apply_log=False):
     """
     Загружает переходы в replay_buffer.
     Может принимать:
@@ -76,6 +95,11 @@ def load_transitions_to_replay_buffer(replay_buffer, source, learn_or_analyze="l
         state_cpu      = to_cpu(data['state'])
         next_state_cpu = to_cpu(data['next_state'])
         action_cpu     = to_cpu(data['action'])
+
+        # 🔹 Логарифмирование состояний
+        if apply_log:
+            state_cpu = log_transform_state(state_cpu)
+            next_state_cpu = log_transform_state(next_state_cpu)
 
         # reward / model_reward — сразу CPU float32
         BLOCKED_ROUNDED = {round(x, 4) for x in [-1.3047, -1.3186, -1.0238]}
