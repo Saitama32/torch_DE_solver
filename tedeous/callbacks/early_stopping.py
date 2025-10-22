@@ -57,10 +57,37 @@ class EarlyStopping(Callback):
 
 
     def _line_create(self):
-        """ Approximating last_loss list (len(last_loss)=loss_oscillation_window) by the line.
+        # 1) окно потерь -> float, выбрасываем неконечные
+        y_full = np.asarray(self.last_loss, dtype=float)
+        x_full = np.arange(len(y_full), dtype=float)
 
-        """
-        self._line = np.polyfit(range(self.loss_window), self.last_loss, 1)
+        mask = np.isfinite(y_full)
+        y = y_full[mask]
+        x = x_full[mask]
+
+        # 2) мало точек → безопасный фолбэк
+        if y.size < 2:
+            cur = self.model.cur_loss.item() if isinstance(self.model.cur_loss, torch.Tensor) else float(self.model.cur_loss)
+            self._line = (0.0, cur)  # (slope, intercept)
+            return
+
+        # 3) центрируем и нормируем диапазон для устойчивости
+        x_mean, y_mean = x.mean(), y.mean()
+        x0, y0 = x - x_mean, y - y_mean
+        xr = np.ptp(x0) or 1.0  # защита от нулевого диапазона
+        yr = np.ptp(y0) or 1.0
+        x1, y1 = x0 / xr, y0 / yr
+
+        try:
+            slope_n, intercept_n = np.polyfit(x1, y1, 1)  # нормализованные коэфф-ты
+            # 4) денормализация
+            slope = (slope_n * yr) / xr
+            intercept = y_mean - slope * x_mean
+            self._line = (float(slope), float(intercept))
+        except np.linalg.LinAlgError:
+            # 5) фолбэк: константа по среднему (наклон 0)
+            self._line = (0.0, float(np.mean(y)))
+
 
     def _window_check(self):
         """ Stopping criteria. We divide angle coeff of the approximating
@@ -146,7 +173,23 @@ class EarlyStopping(Callback):
         self.t = self.model.t
         self.mode = self.model.mode
         self._check = self.model._check
-        try:
-            self.last_loss[(self.t - 3) % self.loss_window] = self.model.cur_loss
-        except:
-            self.last_loss = np.zeros(self.loss_window) + float(self.model.min_loss)
+
+        # Инициализация окна, если его ещё нет
+        if not hasattr(self, "last_loss"):
+            base = self.model.min_loss.item() if isinstance(self.model.min_loss, torch.Tensor) else float(self.model.min_loss)
+            self.last_loss = np.full(self.loss_window, float(base), dtype=float)
+
+        # Берём текущий loss как конечный float
+        cur = self.model.cur_loss
+        if isinstance(cur, torch.Tensor):
+            cur = cur.item()
+        cur = float(cur)
+
+        # Если не конечный — подменяем минимальным известным
+        if not np.isfinite(cur):
+            cur = self.model.min_loss.item() if isinstance(self.model.min_loss, torch.Tensor) else float(self.model.min_loss)
+            cur = float(cur)
+
+        # Пишем в окно
+        self.last_loss[(self.t - 3) % self.loss_window] = cur
+
