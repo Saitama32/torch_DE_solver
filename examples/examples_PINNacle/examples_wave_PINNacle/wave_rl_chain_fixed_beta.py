@@ -283,11 +283,11 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
     }
 
     backup_params = {
-        "experiment_key" : "7eef2a8539884caaab03e61dac561a68",
+        "experiment_key" : "5855f3e3694040ccb85bd77a11d25bea",
     }
 
     experiment.log_parameters(rl_agent_params)
-    # experiment.log_parameters(backup_params)
+    experiment.log_parameters(backup_params)
 
     model.train(optimizer,
                 5e5,
