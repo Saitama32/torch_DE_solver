@@ -265,7 +265,8 @@ def burgers_1d_experiment(x_res, t_res):
                 equation_params=equation_params,
                 AE_model_params=AE_model_params,
                 AE_train_params=AE_train_params,
-                loss_surface_params=loss_surface_params)
+                loss_surface_params=loss_surface_params,
+                backup_params=backup_params)
 
     return exp_dict_list
 
