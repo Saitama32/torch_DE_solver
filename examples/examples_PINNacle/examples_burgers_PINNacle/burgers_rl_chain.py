@@ -249,7 +249,7 @@ def burgers_1d_experiment(x_res, t_res):
     }
 
     backup_params = {
-        "experiment_key" : "9ec1661c2452466cabb6afff38b72d33",
+        "experiment_key" : "b0dae86c42924e4484b8bd194e2d58d9",
     }
 
     experiment.log_parameters(rl_agent_params)
