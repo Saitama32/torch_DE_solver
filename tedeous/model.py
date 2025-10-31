@@ -25,6 +25,11 @@ import os
 from tedeous.RL_utils.load_exps_from_comet import collect_all_comet_transitions
 from tedeous.RL_utils.load_model_from_comet import load_rl_agent_from_comet
 
+def report_gpu(tag=""):
+    allocated = torch.cuda.memory_allocated() / 1024**2
+    reserved = torch.cuda.memory_reserved() / 1024**2
+    print(f"[{tag}] allocated={allocated:.1f} MB, reserved={reserved:.1f} MB")
+
 
 # import random, math
 # torch.manual_seed(1438)
@@ -258,18 +263,21 @@ class Model():
 
             while self.t < epochs and not self.stop_training:
                 callbacks.on_epoch_begin()
+                report_gpu(f"before step {self.t}")
                 self.optimizer.zero_grad()
 
                 iter_count = 1 if self.batch_size is None else self.solution_cls.operator.n_batches
                 for _ in range(iter_count):  # if batch mod then iter until end of batches else only once
-                    if device_type() == 'cuda' and mixed_precision:
-                        closure()
-                        # loss = self.cur_loss.item() if isinstance(self.cur_loss, torch.Tensor) else self.cur_loss
-                        # loss_history.append(loss)
-                    else:
-                        self.optimizer.step(closure)
-                    # if optimizer.gamma is not None and self.t % optimizer.decay_every == 0: # тут ошибка кажется 
-                    #     optimizer.sheduler.step()
+                    with torch.autograd.set_detect_anomaly(True):
+                        if device_type() == 'cuda' and mixed_precision:
+                            closure()
+                            # loss = self.cur_loss.item() if isinstance(self.cur_loss, torch.Tensor) else self.cur_loss
+                            # loss_history.append(loss)
+                        else:
+                            self.optimizer.step(closure)
+                        # if optimizer.gamma is not None and self.t % optimizer.decay_every == 0: # тут ошибка кажется 
+                        #     optimizer.sheduler.step()
+                report_gpu(f"after step {self.t}")
 
                 loss = float(self.cur_loss.item()) if isinstance(self.cur_loss, torch.Tensor) else float(self.cur_loss)
 
