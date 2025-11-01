@@ -9,6 +9,9 @@ import datetime
 import copy
 import itertools
 import torch, gc
+from pytorch_memlab import MemReporter
+
+reporter = MemReporter()
 
 from tedeous.data import Domain, Conditions, Equation
 from tedeous.input_preprocessing import Operator_bcond_preproc
@@ -472,6 +475,8 @@ class Model():
                 state = {"loss_total": torch.zeros(state_shape),
                          "loss_oper": torch.zeros(state_shape),
                          "loss_bnd": torch.zeros(state_shape)}
+                
+                on_first_step = True
 
                 # state = torch.tensor()
 
@@ -527,12 +532,16 @@ class Model():
                           f'\nTime: {datetime.datetime.now()}.'
                           f'\nUsing optimizer: {action["type"]} for {action["epochs"]} epochs.'
                           f'\nTotal Reward = {total_reward}.\n')
+                    reporter.report() 
 
-                    loss, solver_models = execute_training_phase(
-                        action["epochs"],
-                        n_save_models=rl_agent_params['n_save_models'],
-                        stuck_threshold=rl_agent_params['stuck_threshold']
-                    )
+                    if on_first_step:
+
+                        loss, solver_models = execute_training_phase(
+                            action["epochs"],
+                            n_save_models=rl_agent_params['n_save_models'],
+                            stuck_threshold=rl_agent_params['stuck_threshold']
+                        )
+                        on_first_step = False
 
                     # if loss != loss:
                     #     self.rl_penalty = 0
@@ -548,6 +557,8 @@ class Model():
                               f"\nRight number = {rl_agent_params['n_save_models']}")
 
                     net = self.net.to(device_type())
+
+                    reporter.report() 
 
                     if callable(rl_agent_params["exact_solution"]):
                         operator_rmse = torch.sqrt(
@@ -573,19 +584,20 @@ class Model():
                             boundary_rmse_lst.append(torch.sqrt(torch.mean(result)))
 
                     boundary_rmse = torch.sum(torch.stack(boundary_rmse_lst))
+                    reporter.report() 
 
                     print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
-                    gc.collect()
-                    torch.cuda.empty_cache()
+                    # gc.collect()
+                    # torch.cuda.empty_cache()
 
                     env.solver_models = solver_models
                     env.reward_params = {
                         "operator": {
-                            "error": operator_rmse,
+                            "error": operator_rmse.detach().cpu(),
                             "coeff": rl_agent_params["reward_operator_coeff"]
                         },
                         "bconds": {
-                            "error": boundary_rmse,
+                            "error": boundary_rmse.detach().cpu(),
                             "coeff": rl_agent_params["reward_boundary_coeff"]
                         }
                     }
@@ -595,7 +607,11 @@ class Model():
 
                     # input weights (for generate state) and loss (for calculate reward) to step method
                     # first getting current models and current losses
+                    # if on_first_step:
+                    #     next_state, reward, done, _ = env.step()
+                    #     reporter.report() 
                     next_state, reward, done, _ = env.step()
+                        
                     
                     reward_scalar = reward.item()  # предполагаем, что reward — скаляр
 
@@ -681,6 +697,7 @@ class Model():
 
                     # callbacks.callbacks[1].save_every = self.t
                     # env.render()
+                    reporter.report() 
 
                     if done == 1:
                         break

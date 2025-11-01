@@ -172,7 +172,7 @@ def heat_2d_long_time_experiment(grid_res):
     model.compile('autograd', lambda_operator=1, lambda_bound=100)
     u_exact_test = exact_func(grid_test).reshape(-1)
 
-    equation_params = [u_exact_test, grid_test, grid, domain, equation, boundaries, model_layers]
+    equation_params = [u_exact_test, grid_test, domain, equation, boundaries, model_layers]
 
     img_dir = os.path.join(os.path.dirname(__file__), 'heat_2d_long_time_img')
 
@@ -312,7 +312,7 @@ def heat_2d_long_time_experiment(grid_res):
 
 
 if __name__ == "__main__":
-    grid_res = 100
+    grid_res = 50
     set_seed(444, deterministic=False)
 
     exp_dict_list = heat_2d_long_time_experiment(grid_res)

@@ -60,8 +60,6 @@ class EnvRLOptimizer(gym.Env):
         self.reward_method = reward_method
         self.callbacks = callbacks
 
-        self.visualization_model = VisualizationModel(**self.AE_model_params)
-        self.plot_loss_surface = None
 
         # Размерность нужно вытягивать из кода loss landscape, она будет постоянной,
         # т.к. action_dim - список оптимизаторов, он не меняется
@@ -75,13 +73,14 @@ class EnvRLOptimizer(gym.Env):
         # self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=self.visualization_model.latent_dim,
         #                                     dtype=np.float32)
         # observation_space = 3
-        self.observation_space = self.visualization_model.latent_dim + 1
+        self.observation_space = 2 + 1
 
         self.current_reward = None
         self.reward_history = []
         self.tolerance = tolerance
         self.counter = 1
         self.n_save_models = n_save_models
+        self.on_start = True
 
     def reset(self):
         """Reset environment - load error surface, reset history to zero, select starting point."""
@@ -107,18 +106,20 @@ class EnvRLOptimizer(gym.Env):
         optimizer = Optimizer('RMSprop', {'lr': learning_rate}, cosine_scheduler_patience=cosine_scheduler_patience)
         cb_es = EarlyStopping(patience=patience_scheduler)
 
-        AEmodel = self.visualization_model.train(
-            optimizer, epochs, every_epoch, batch_size, resume,
-            callbacks=[cb_es], solver_models=self.solver_models, finetune_AE_model=finetune_AE_model
+        visualization_model = VisualizationModel(**self.AE_model_params)
+        AEmodel = visualization_model.train(
+        optimizer, epochs, every_epoch, batch_size, resume,
+        callbacks=[cb_es], solver_models=self.solver_models, finetune_AE_model=finetune_AE_model
         )
+
 
         self.loss_surface_params['solver_models'] = self.solver_models
         self.loss_surface_params['AE_model'] = AEmodel
 
-        self.plot_loss_surface = PlotLossSurface(**self.loss_surface_params)
-        self.plot_loss_surface.counter = self.counter
+        plot_loss_surface = PlotLossSurface(**self.loss_surface_params)
+        plot_loss_surface.counter = self.counter
 
-        self.raw_states_dict = self.plot_loss_surface.save_equation_loss_surface(*self.equation_params)
+        self.raw_states_dict = plot_loss_surface.save_equation_loss_surface(*self.equation_params)
 
         if len(self.reward_history) == 0:
             prev_reward = 0
@@ -131,6 +132,7 @@ class EnvRLOptimizer(gym.Env):
         ) + self.rl_penalty
 
         self.reward_history.append(self.current_reward)
+        self.reward_history = self.reward_history[-5:]
 
         done = (abs(self.current_reward.item()) < self.tolerance) + self.rl_penalty
 

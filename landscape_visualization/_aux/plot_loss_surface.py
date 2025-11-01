@@ -209,7 +209,7 @@ class PlotLossSurface:
         
         return losses_dict 
 
-    def get_coordinates_and_losses_of_trajectories(self, grid, domain, equation, boundaries, PINN_layers):
+    def get_coordinates_and_losses_of_trajectories(self, domain, equation, boundaries, PINN_layers):
         """Get coordinates and losses of trajectories.
 
         Args:
@@ -255,7 +255,7 @@ class PlotLossSurface:
 
         return trajectory_losses, original_trajectory_losses, trajectory_coordinates
 
-    def get_coordinates_and_losses_of_surface(self, grid, domain, equation, boundaries, PINN_layers):
+    def get_coordinates_and_losses_of_surface(self, domain, equation, boundaries, PINN_layers):
         """Get coordinates and losses of surface.
 
         Args:
@@ -549,7 +549,7 @@ class PlotLossSurface:
             self.plotting(trajectory_losses[loss_type], original_trajectory_losses[loss_type], trajectory_coordinates,
                       grid_losses[loss_type], grid_xx, grid_yy, rec_grid_models)
 
-    def save_equation_loss_surface(self, u_exact_test: torch.Tensor, grid_test: torch.Tensor, grid: torch.Tensor,
+    def save_equation_loss_surface(self, u_exact_test: torch.Tensor, grid_test: torch.Tensor,
                                    domain: Domain, equation: Equation, boundaries: Conditions, PINN_layers: list):
         """save_low_dimensional_loss_surface.
         Args:
@@ -564,10 +564,10 @@ class PlotLossSurface:
         self.u_exact_test = u_exact_test
 
         trajectory_losses, original_trajectory_losses, trajectory_coordinates = \
-            self.get_coordinates_and_losses_of_trajectories(grid, domain, equation, boundaries, PINN_layers)
+            self.get_coordinates_and_losses_of_trajectories(domain, equation, boundaries, PINN_layers)
 
         grid_losses, grid_xx, grid_yy, rec_grid_models = \
-            self.get_coordinates_and_losses_of_surface(grid, domain, equation, boundaries, PINN_layers)
+            self.get_coordinates_and_losses_of_surface(domain, equation, boundaries, PINN_layers)
         
          
         for loss_type in self.loss_types:
