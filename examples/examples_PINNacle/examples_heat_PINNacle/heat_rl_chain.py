@@ -12,6 +12,7 @@ import numpy as np
 import os
 import sys
 import time
+import random
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -37,6 +38,30 @@ solver_device(device)
 eps = 1
 N = 10
 k = torch.arange(N)
+
+
+def set_seed(seed: int = 42, deterministic: bool = True):
+    # 1) Базовые источники случайности
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # если несколько GPU
+
+    # 2) Детерминизм в PyTorch/cuDNN
+    if deterministic:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        # Жёстко: может бросать ошибки на недетерминированных операциях
+        torch.use_deterministic_algorithms(True, warn_only=False)
+    else:
+        # быстрее, но менее воспроизводимо
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
+
+    # (необязательно) иногда помогает для повторяемости hash в сторонних либах
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 
 
 def exact_func(grid):
@@ -162,15 +187,15 @@ def heat_2d_long_time_experiment(grid_res):
     optimizer = {
         'Adam':{
             'lr':[1e-2, 1e-3, 1e-4],
-            'epochs':[100, 1000, 2500]
+            'epochs':[20, 30, 20]
         },
         'LBFGS':{
             'lr':[1, 5e-1, 1e-1],
-            'epochs':[100, 500, 1500]
+            'epochs':[15, 15, 15]
         },
         'PSO':{
             'lr':[0.0, 1e-3, 1e-4],
-            'epochs':[100, 200, 300]
+            'epochs':[15, 15, 15]
         },
     }
 
@@ -288,6 +313,7 @@ def heat_2d_long_time_experiment(grid_res):
 
 if __name__ == "__main__":
     grid_res = 100
+    set_seed(444, deterministic=False)
 
     exp_dict_list = heat_2d_long_time_experiment(grid_res)
 

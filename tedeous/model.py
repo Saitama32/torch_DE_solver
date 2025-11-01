@@ -297,6 +297,8 @@ class Model():
                 if rl_agent_params:
                     current_model = copy.deepcopy(self.net)
                     self.saved_models.append(current_model)
+
+                report_gpu(f"after deepcopy {self.t}")
                     # self.prev_to_current_optimizer_models.append(current_model)
 
                 loss_history.append(loss)
@@ -314,8 +316,8 @@ class Model():
                 print(f'[{datetime.datetime.now()}] Step = {self.t}, loss = {loss:.6f}.')
 
             if rl_agent_params:
-                current_model = copy.deepcopy(self.net)
-                self.saved_models.append(current_model)
+                # current_model = copy.deepcopy(self.net)
+                # self.saved_models.append(current_model)
 
                 loss_history = loss_history[-stuck_threshold:]
 
