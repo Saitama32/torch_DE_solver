@@ -8,6 +8,7 @@ import os
 import datetime
 import copy
 import itertools
+import torch, gc
 
 from tedeous.data import Domain, Conditions, Equation
 from tedeous.input_preprocessing import Operator_bcond_preproc
@@ -574,6 +575,8 @@ class Model():
                     boundary_rmse = torch.sum(torch.stack(boundary_rmse_lst))
 
                     print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
+                    gc.collect()
+                    torch.cuda.empty_cache()
 
                     env.solver_models = solver_models
                     env.reward_params = {
