@@ -131,6 +131,7 @@ class EnvRLOptimizer(gym.Env):
         ) + self.rl_penalty
 
         self.reward_history.append(self.current_reward)
+        self.reward_history = self.reward_history[-5:]
 
         done = (abs(self.current_reward.item()) < self.tolerance) + self.rl_penalty
 
