@@ -561,11 +561,11 @@ class Model():
                     env.solver_models = solver_models
                     env.reward_params = {
                         "operator": {
-                            "error": operator_rmse,
+                            "error": operator_rmse.detach().cpu(),
                             "coeff": rl_agent_params["reward_operator_coeff"]
                         },
                         "bconds": {
-                            "error": boundary_rmse,
+                            "error": boundary_rmse.detach().cpu(),
                             "coeff": rl_agent_params["reward_boundary_coeff"]
                         }
                     }
