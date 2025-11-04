@@ -3,7 +3,7 @@ from comet_ml.integration.pytorch import log_model
 
 experiment = start(
   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_burgers_tolerance",
+  project_name="rlpinn_burgers_final",
   workspace="saitama32"
 )
 
@@ -232,7 +232,7 @@ def burgers_1d_experiment(x_res, t_res):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 0.0410, 
+        "tolerance": 0.040956, 
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
@@ -248,12 +248,13 @@ def burgers_1d_experiment(x_res, t_res):
         "exp": experiment,
     }
 
-    backup_params = {
-        "experiment_key" : "b0dae86c42924e4484b8bd194e2d58d9",
-    }
+    # backup_params = {
+    #     "experiment_key" : "b0dae86c42924e4484b8bd194e2d58d9",
+    # }
+    backup_params = None
 
     experiment.log_parameters(rl_agent_params)
-    experiment.log_parameters(backup_params)
+    # experiment.log_parameters(backup_params)
 
     model.train(optimizer,
                 5e5,

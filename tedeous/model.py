@@ -436,9 +436,10 @@ class Model():
             # rl_agent.replay_buffer = PrioritizedReplayBuffer(rl_agent_params["rl_buffer_size"])
 
             rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=75)
-            optim_state, params_state = load_rl_agent_from_comet(backup_params["experiment_key"], map_location=device_type())
-            rl_agent.model_optim.load_state_dict(optim_state)
-            rl_agent.model_params.load_state_dict(params_state)
+            if backup_params["experiment_key"]:
+                optim_state, params_state = load_rl_agent_from_comet(backup_params["experiment_key"], map_location=device_type())
+                rl_agent.model_optim.load_state_dict(optim_state)
+                rl_agent.model_params.load_state_dict(params_state)
 
             while n_steps < n_steps_max:
 
