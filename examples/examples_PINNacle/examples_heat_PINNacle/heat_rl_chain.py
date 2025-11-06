@@ -3,7 +3,7 @@ from comet_ml.integration.pytorch import log_model
 
 experiment = start(
   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_heat_2d_tolerance",
+  project_name="rlpinn_heat_2d_final",
   workspace="saitama32"
 )
 
@@ -27,7 +27,7 @@ from tedeous.utils import exact_solution_data
 experiment.log_parameters({
     "param": "v_1",
     "reward_function": "v_2",
-    "description": "farm_transitions_Heat_2d_1d_basic_RL_optimizer"
+    "description": "optimization_Heat_2d_1d_basic_RL_optimizer"
 })
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
