@@ -247,7 +247,7 @@ def heat_2d_long_time_experiment(grid_res):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 0.0410, 
+        "tolerance": 0.060776, 
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
