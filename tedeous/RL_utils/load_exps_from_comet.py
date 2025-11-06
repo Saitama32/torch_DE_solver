@@ -8,7 +8,7 @@ from tedeous.RL_utils.load_transitions_into_buffer_pickle import load_transition
 
 # === Настройки ===
 WORKSPACE = "saitama32"
-PROJECT_NAME = "rlpinn-burgers-tolerance"
+PROJECT_NAME = "rlpinn-heat-2d-tolerance"
 # MAX_EXPERIMENTS = 15  # можно изменить при необходимости
 
 api = API(api_key="aP71fQTYPNqfsYWvudPPmoBl5")  # или просто API()
@@ -49,8 +49,8 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
     """Собирает все переходы из не-crashed экспериментов проекта и возвращает заполненный PrioritizedReplayBuffer."""
     print("🔍 Получаем эксперименты из Comet...")
     experiments = list(api.get_experiments(workspace=WORKSPACE, project_name=PROJECT_NAME))
-    valid_experiments = [exp for exp in experiments if not is_crashed(exp)]
-    experiments_sorted = sorted(valid_experiments, key=get_end_time, reverse=True)
+    # valid_experiments = [exp for exp in experiments if not is_crashed(exp)]
+    experiments_sorted = sorted(experiments, key=get_end_time, reverse=True)
     experiments_sorted_duration = [
         exp for exp in experiments_sorted
         if get_duration_hours(exp) >= duration_grater_hours
