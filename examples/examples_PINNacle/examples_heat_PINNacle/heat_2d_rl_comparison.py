@@ -361,8 +361,7 @@ def heat_2d_long_time_experiment(grid_res):
 
 
 if __name__ == "__main__":
-    x_res = 257
-    t_res = 101
+    grid_res = 100
     # список сидов для экспериментов
     # seeds = [678, 789, 890, 901, 1012]   # можно расширить список
     seeds = [123, 234, 345, 456, 567]   # можно расширить список
@@ -376,5 +375,5 @@ if __name__ == "__main__":
         random.seed(seed)
 
 
-        exp_dict_list = heat_2d_long_time_experiment(x_res, t_res)
+        exp_dict_list = heat_2d_long_time_experiment(grid_res)
 
