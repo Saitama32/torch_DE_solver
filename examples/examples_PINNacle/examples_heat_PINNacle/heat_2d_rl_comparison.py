@@ -286,7 +286,7 @@ def heat_2d_long_time_experiment(grid_res):
                 AE_model_params=AE_model_params,
                 AE_train_params=AE_train_params,
                 loss_surface_params=loss_surface_params,
-                comparison_params=comparison_params)
+                comparison_param=comparison_params)
     
 
     net = model.net.to(device)
