@@ -64,7 +64,7 @@ def heat_3d_analytic_experiment(grid_res):
     domain.variable('t', [0, t_max], 10)
 
     domain_test = Domain()
-    grid_test_res = 80
+    grid_test_res = 70
 
     domain_test.variable('x', [x_min, x_max], grid_test_res)
     domain_test.variable('y', [y_min, y_max], grid_test_res)
@@ -307,6 +307,6 @@ def heat_3d_analytic_experiment(grid_res):
 
 
 if __name__ == "__main__":
-    grid_res = 100
+    grid_res = 80
 
     exp_dict_list = heat_3d_analytic_experiment(grid_res)
