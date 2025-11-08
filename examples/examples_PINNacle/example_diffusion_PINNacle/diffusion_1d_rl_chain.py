@@ -232,7 +232,7 @@ def diffusion_1d_experiment(grid_res):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 0.040956, 
+        "tolerance": 0.0, 
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
