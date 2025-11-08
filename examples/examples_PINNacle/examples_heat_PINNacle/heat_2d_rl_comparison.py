@@ -297,12 +297,22 @@ def heat_2d_long_time_experiment(grid_res):
     error_op_rmse_train = torch.sqrt(torch.mean(diff ** 2))
     variable_dict = domain.variable_dict
     bconds = boundaries.build(variable_dict)
-    error_bnd_rmse_train = torch.sum(torch.stack([
-                        torch.sqrt(torch.mean(
-                            (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
-                        ))
-                        for b in bconds
-                    ]))
+
+    boundary_rmse_lst = []
+    for b in bconds:
+        if isinstance(b["bnd"], torch.Tensor):
+            bnd_lst = [b["bnd"]]
+        for bnd in bnd_lst:
+            net_bnd = net(bnd)
+            try:
+                result = (b["bval"].reshape_as(net_bnd) - net_bnd) ** 2
+            except:
+                result = (torch.full(net_bnd.shape, b["bval"].item()) - net_bnd) ** 2
+            boundary_rmse_lst.append(torch.sqrt(torch.mean(result)))
+
+    error_bnd_rmse_train = torch.sum(torch.stack(boundary_rmse_lst))
+    
+
     error_rmse_train_full = error_op_rmse_train + error_bnd_rmse_train
 
     error_l2re_train = torch.sqrt(torch.sum(
@@ -321,12 +331,20 @@ def heat_2d_long_time_experiment(grid_res):
     bconds = boundaries.build(variable_dict)
     u_exact_test = exact_func(grid_test).to(device).reshape(-1, 1)
     error_op_rmse_test = torch.sqrt(torch.mean((u_exact_test - net(grid_test)) ** 2))
-    error_bnd_rmse_test = torch.sum(torch.stack([
-                    torch.sqrt(torch.mean(
-                        (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
-                    ))
-                    for b in bconds
-                ]))
+    boundary_rmse_lst = []
+    for b in bconds:
+        if isinstance(b["bnd"], torch.Tensor):
+            bnd_lst = [b["bnd"]]
+        for bnd in bnd_lst:
+            net_bnd = net(bnd)
+            try:
+                result = (b["bval"].reshape_as(net_bnd) - net_bnd) ** 2
+            except:
+                result = (torch.full(net_bnd.shape, b["bval"].item()) - net_bnd) ** 2
+            boundary_rmse_lst.append(torch.sqrt(torch.mean(result)))
+
+    error_bnd_rmse_test = torch.sum(torch.stack(boundary_rmse_lst)) 
+    
     error_rmse_test_full = error_op_rmse_test + error_bnd_rmse_test
     error_l2re_test = torch.sqrt(torch.sum(
         (u_exact_test - net(grid_test)) ** 2) / torch.sum(u_exact_test ** 2))
