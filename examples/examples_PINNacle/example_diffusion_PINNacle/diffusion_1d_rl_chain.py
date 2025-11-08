@@ -3,7 +3,7 @@ from comet_ml.integration.pytorch import log_model
 
 experiment = start(
   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_burgers_final",
+  project_name="rlpinn_diffusion_1d_farm_transitions",
   workspace="saitama32"
 )
 
@@ -26,7 +26,7 @@ from tedeous.device import solver_device
 experiment.log_parameters({
     "param": "v_1",
     "reward_function": "v_2",
-    "description": "farm_transitions_Burgers_1d_basic_RL_optimizer"
+    "description": "farm_transitions_diffusion_1d_basic_RL_optimizer"
 })
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
