@@ -159,8 +159,9 @@ def heat_3d_analytic_experiment(grid_res):
 
     grid = domain.build('NN').to(device)
     grid_test = domain_test.build('NN').to(device)
+    batch_size = 200_000 
 
-    model = Model(net, domain, equation, boundaries)
+    model = Model(net, domain, equation, boundaries, batch_size=batch_size)
 
     
     model.compile('autograd', lambda_operator=1, lambda_bound=100)
