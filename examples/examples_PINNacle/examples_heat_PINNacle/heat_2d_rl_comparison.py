@@ -268,7 +268,7 @@ def heat_2d_long_time_experiment(grid_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "6f2efb79e97b4d1ebce7d008b9325209"
+        "experiment_key": "48ca59c659f840bebd263df6c250309f"
     }
 
     experiment.log_parameters(rl_agent_params)
@@ -344,7 +344,7 @@ def heat_2d_long_time_experiment(grid_res):
             boundary_rmse_lst.append(torch.sqrt(torch.mean(result)))
 
     error_bnd_rmse_test = torch.sum(torch.stack(boundary_rmse_lst)) 
-    
+
     error_rmse_test_full = error_op_rmse_test + error_bnd_rmse_test
     error_l2re_test = torch.sqrt(torch.sum(
         (u_exact_test - net(grid_test)) ** 2) / torch.sum(u_exact_test ** 2))
