@@ -435,7 +435,7 @@ class Model():
             # rl_agent.n_transitions_reinit = 1000
             # rl_agent.replay_buffer = PrioritizedReplayBuffer(rl_agent_params["rl_buffer_size"])
 
-            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=150, tolerance_grater= rl_agent_params["tolerance"]-0.00001,)
+            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=150, tolerance = rl_agent_params["tolerance"],)
             if backup_params is not None:
                 optim_state, params_state = load_rl_agent_from_comet(backup_params["experiment_key"], map_location=device_type())
                 rl_agent.model_optim.load_state_dict(optim_state)

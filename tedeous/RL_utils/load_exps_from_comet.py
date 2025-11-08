@@ -21,6 +21,15 @@ def get_metadata_field(exp, field, default=None):
         return meta.get(field, default)
     except Exception:
         return default
+    
+
+def get_param_value(exp, param_name, default=None):
+    try:
+        params = exp.get_parameters_summary()
+        params_dict = {p["name"]: p["valueCurrent"] for p in params}
+        return params_dict.get(param_name, default)
+    except Exception:
+        return default
 
 
 def get_end_time(exp):
@@ -45,7 +54,7 @@ def is_crashed(exp):
 
 
 # === Основная функция ===
-def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None, tolerance_grater = 0.0) -> PrioritizedReplayBuffer:
+def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None, tolerance = 0.0) -> PrioritizedReplayBuffer:
     """Собирает все переходы из не-crashed экспериментов проекта и возвращает заполненный PrioritizedReplayBuffer."""
     print("🔍 Получаем эксперименты из Comet...")
     experiments = list(api.get_experiments(workspace=WORKSPACE, project_name=PROJECT_NAME))
@@ -61,7 +70,7 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
 
     experiments_sorted_tol = [
         exp for exp in experiments_sorted_duration 
-        if float(get_metadata_field(exp, "tolerance", 0.0)) >= tolerance_grater
+        if float(get_param_value(exp, "tolerance", 0.0)) >= tolerance
     ]
 
     print(f"✅ Найдено {len(experiments_sorted_tol)} активных экспериментов для загрузки буферов.\n")
