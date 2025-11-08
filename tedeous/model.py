@@ -790,9 +790,9 @@ class Model():
                 net = self.net.to(device_type())
 
                 if callable(rl_agent_params["exact_solution"]):
-                    operator_rmse = torch.sqrt(
-                        torch.mean((rl_agent_params["exact_solution"](grid).reshape(-1, 1) - net(grid)) ** 2)
-                    )
+                        operator_rmse = torch.sqrt(
+                            torch.mean((rl_agent_params["exact_solution"](grid).reshape(-1, 1) - net(grid)) ** 2)
+                        )
                 else:
                     exact = exact_solution_data(grid, rl_agent_params["exact_solution"],
                                                 equation_params[-1][0], equation_params[-1][-1],
@@ -800,21 +800,30 @@ class Model():
                     net_predicted = net(grid)
                     operator_rmse = torch.sqrt(torch.mean((exact.reshape(-1, 1) - net_predicted) ** 2))
 
-                boundary_rmse = torch.sum(torch.stack([
-                    torch.sqrt(torch.mean(
-                        (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
-                    ))
-                    for b in bconds
-                ]))
+                boundary_rmse_lst = []
+                for b in bconds:
+                    if isinstance(b["bnd"], torch.Tensor):
+                        bnd_lst = [b["bnd"]]
+                    for bnd in bnd_lst:
+                        net_bnd = net(bnd)
+                        try:
+                            result = (b["bval"].reshape_as(net_bnd) - net_bnd) ** 2
+                        except:
+                            result = (torch.full(net_bnd.shape, b["bval"].item()) - net_bnd) ** 2
+                        boundary_rmse_lst.append(torch.sqrt(torch.mean(result)))
+
+                boundary_rmse = torch.sum(torch.stack(boundary_rmse_lst))
+
+                print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
 
                 env.solver_models = solver_models
                 env.reward_params = {
                     "operator": {
-                        "error": operator_rmse,
+                        "error": operator_rmse.detach().cpu(),
                         "coeff": rl_agent_params["reward_operator_coeff"]
                     },
                     "bconds": {
-                        "error": boundary_rmse,
+                        "error": boundary_rmse.detach().cpu(),
                         "coeff": rl_agent_params["reward_boundary_coeff"]
                     }
                 }
