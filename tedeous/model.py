@@ -262,6 +262,7 @@ class Model():
 
                 iter_count = 1 if self.batch_size is None else self.solution_cls.operator.n_batches
                 for _ in range(iter_count):  # if batch mod then iter until end of batches else only once
+                    print(f"Batch {_+1} / {iter_count}")
                     if device_type() == 'cuda' and mixed_precision:
                         closure()
                         # loss = self.cur_loss.item() if isinstance(self.cur_loss, torch.Tensor) else self.cur_loss

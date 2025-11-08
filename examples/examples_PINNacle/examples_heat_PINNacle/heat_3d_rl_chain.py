@@ -159,7 +159,7 @@ def heat_3d_analytic_experiment(grid_res):
 
     grid = domain.build('NN').to(device)
     grid_test = domain_test.build('NN').to(device)
-    batch_size = 100_000 
+    batch_size = 50_000 
 
     model = Model(net, domain, equation, boundaries, batch_size=batch_size)
 

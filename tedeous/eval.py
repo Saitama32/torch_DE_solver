@@ -126,6 +126,7 @@ class Operator():
             self.grid_loader =  DataLoader(self.sorted_grid, batch_size=self.batch_size, shuffle=True,
                                       generator=torch.Generator(device=device_type()))
             self.n_batches = len(self.grid_loader)
+            print("Number of batches per epoch:", self.n_batches)
             del self.sorted_grid
             torch.cuda.empty_cache()
             self.init_mini_batches()
