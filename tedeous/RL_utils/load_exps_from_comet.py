@@ -45,7 +45,7 @@ def is_crashed(exp):
 
 
 # === Основная функция ===
-def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None) -> PrioritizedReplayBuffer:
+def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None, tolerance_grater = 0.0) -> PrioritizedReplayBuffer:
     """Собирает все переходы из не-crashed экспериментов проекта и возвращает заполненный PrioritizedReplayBuffer."""
     print("🔍 Получаем эксперименты из Comet...")
     experiments = list(api.get_experiments(workspace=WORKSPACE, project_name=PROJECT_NAME))
@@ -59,11 +59,16 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
 
     experiments_sorted_duration = experiments_sorted_duration[:max_exps_last]
 
-    print(f"✅ Найдено {len(experiments_sorted_duration)} активных экспериментов для загрузки буферов.\n")
+    experiments_sorted_tol = [
+        exp for exp in experiments_sorted_duration 
+        if float(get_metadata_field(exp, "tolerance", 0.0)) >= tolerance_grater
+    ]
+
+    print(f"✅ Найдено {len(experiments_sorted_tol)} активных экспериментов для загрузки буферов.\n")
 
     all_transitions = []  # сюда соберём всё
 
-    for i, exp in enumerate(experiments_sorted_duration, 1):
+    for i, exp in enumerate(experiments_sorted_tol, 1):
         meta = exp.get_metadata()
         exp_id = meta.get("experimentKey")
         exp_name = meta.get("experimentName")
