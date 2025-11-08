@@ -1,7 +1,7 @@
 #!/bin/bash
 # Автоматический запуск diffusion_1d_farm.py с распределением по GPU
 
-SCRIPT="examples/examples_PINNacle/example_diffusion_PINNacle/diffusion_1d_rl_chain.py"
+SCRIPT="examples/examples_PINNacle/example_diffusion_PINNacle/convection_diffusion_1d_rl_chain.py"
 
 # Проверяем, сколько доступно GPU
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
