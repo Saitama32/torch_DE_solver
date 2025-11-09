@@ -85,9 +85,9 @@ def convection_diffusion_1d_experiment(grid_res):
                 'pow': 1,
                 'var': 0
             },
-        '-a * du/dx**1':
+        'a * du/dx**1':
             {
-                'coeff': -a,
+                'coeff': a,
                 'term': [0],
                 'pow': 1,
                 'var': 0
