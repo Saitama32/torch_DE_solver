@@ -237,7 +237,7 @@ def burgers_1d_experiment(x_res, t_res):
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
         "rl_buffer_size": 10000,
-        "rl_batch_size": 32,
+        "rl_batch_size": 64,
         "n_transitions_reinit" : 2000,
         "gamma": 0.9,
         "rl_reward_method": "absolute",
