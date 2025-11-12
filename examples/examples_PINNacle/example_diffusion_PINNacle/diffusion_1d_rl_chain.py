@@ -3,7 +3,7 @@ from comet_ml.integration.pytorch import log_model
 
 experiment = start(
   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_diffusion_1d_farm_transitions",
+  project_name="rlpinn_diffusion_1d_optimization",
   workspace="saitama32"
 )
 
@@ -237,7 +237,7 @@ def diffusion_1d_experiment(grid_res):
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
         "rl_buffer_size": 10000,
-        "rl_batch_size": 32,
+        "rl_batch_size": 64,
         "n_transitions_reinit" : 2000,
         "gamma": 0.9,
         "rl_reward_method": "absolute",
