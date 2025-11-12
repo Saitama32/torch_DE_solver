@@ -255,7 +255,7 @@ def burgers_1d_experiment(x_res, t_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "0e05a2d6ab0b454484fca0bde70c6d68"
+        "experiment_key": "64f5be6b1c224b3986ac88d7fea49a3a"
     }
 
     experiment.log_parameters(rl_agent_params)
