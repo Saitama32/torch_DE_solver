@@ -249,7 +249,7 @@ def burgers_1d_experiment(x_res, t_res):
     }
 
     backup_params = {
-        "experiment_key" : "049562110d284bb182a4e1b8110094bf",
+        "experiment_key" : "532ea24c0bf24e4bb7d521184e2e1f88",
     }
     # backup_params = None
 
