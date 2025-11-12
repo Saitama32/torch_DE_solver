@@ -237,7 +237,7 @@ def burgers_1d_experiment(x_res, t_res):
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
         "rl_buffer_size": 10000,
-        "rl_batch_size": 64,
+        "rl_batch_size": 32,
         "n_transitions_reinit" : 2000,
         "gamma": 0.9,
         "rl_reward_method": "absolute",
@@ -248,10 +248,10 @@ def burgers_1d_experiment(x_res, t_res):
         "exp": experiment,
     }
 
-    # backup_params = {
-    #     "experiment_key" : "a5c2121355bb42afb5e338d4a5b9c5c0",
-    # }
-    backup_params = None
+    backup_params = {
+        "experiment_key" : "049562110d284bb182a4e1b8110094bf",
+    }
+    # backup_params = None
 
     experiment.log_parameters(rl_agent_params)
     experiment.log_parameters(backup_params)
