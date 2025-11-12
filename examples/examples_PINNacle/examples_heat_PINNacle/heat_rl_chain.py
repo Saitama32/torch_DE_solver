@@ -252,7 +252,7 @@ def heat_2d_long_time_experiment(grid_res):
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
         "rl_buffer_size": 10000,
-        "rl_batch_size": 32,
+        "rl_batch_size": 64,
         "n_transitions_reinit" : 2000,
         "gamma": 0.9,
         "rl_reward_method": "absolute",
@@ -263,9 +263,9 @@ def heat_2d_long_time_experiment(grid_res):
         "exp": experiment,
     }
 
-    backup_params = {
-        "experiment_key" : "859da27afb394c83aefe85dc417250bc",
-    }
+    # backup_params = {
+    #     "experiment_key" : "859da27afb394c83aefe85dc417250bc",
+    # }
     backup_params = None
     experiment.log_parameters(rl_agent_params)
     experiment.log_parameters(backup_params)
