@@ -264,7 +264,7 @@ def heat_2d_long_time_experiment(grid_res):
     }
 
     backup_params = {
-        "experiment_key" : "568cbdf678ab477d973ad557303605e7",
+        "experiment_key" : "b7e4451415734a38890870e180d7a8e6",
     }
     # backup_params = None
     experiment.log_parameters(rl_agent_params)
