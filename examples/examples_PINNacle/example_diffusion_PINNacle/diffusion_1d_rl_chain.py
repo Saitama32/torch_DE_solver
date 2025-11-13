@@ -237,7 +237,7 @@ def diffusion_1d_experiment(grid_res):
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
         "rl_buffer_size": 10000,
-        "rl_batch_size": 64,
+        "rl_batch_size": 32,
         "n_transitions_reinit" : 2000,
         "gamma": 0.9,
         "rl_reward_method": "absolute",
@@ -248,10 +248,10 @@ def diffusion_1d_experiment(grid_res):
         "exp": experiment,
     }
 
-    # backup_params = {
-    #     "experiment_key" : "b0dae86c42924e4484b8bd194e2d58d9",
-    # }
-    backup_params = None
+    backup_params = {
+        "experiment_key" : "4fd3127d1f694212b3b0356674ebed55",
+    }
+    # backup_params = None
 
     experiment.log_parameters(rl_agent_params)
     # experiment.log_parameters(backup_params)
