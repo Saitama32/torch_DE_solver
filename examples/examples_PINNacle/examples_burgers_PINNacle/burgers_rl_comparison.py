@@ -236,7 +236,7 @@ def burgers_1d_experiment(x_res, t_res):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 0.0410, 
+        "tolerance": 0.040956, 
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
@@ -255,7 +255,7 @@ def burgers_1d_experiment(x_res, t_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "0dc980a8866244f58219713c3f5b2255"
+        "experiment_key": "54f9a754c08b401e8b0d35929fd784b3"
     }
 
     experiment.log_parameters(rl_agent_params)
