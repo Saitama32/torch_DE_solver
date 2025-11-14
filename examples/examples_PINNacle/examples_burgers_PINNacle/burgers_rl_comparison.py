@@ -255,7 +255,7 @@ def burgers_1d_experiment(x_res, t_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "357b512263b04bc8bc49e5e837a01e16"
+        "experiment_key": "64f5be6b1c224b3986ac88d7fea49a3a"
     }
 
     experiment.log_parameters(rl_agent_params)
@@ -345,7 +345,7 @@ if __name__ == "__main__":
     t_res = 101
     # список сидов для экспериментов
     # seeds = [678, 789, 890, 901, 1012]   # можно расширить список
-    seeds = [123, 234, 345, 456, 567]   # можно расширить список
+    seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
 
     for seed in seeds:
         print(f"\n🔹 Запуск эксперимента с seed = {seed}")
