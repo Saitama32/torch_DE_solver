@@ -161,132 +161,18 @@ def heat_2d_long_time_experiment(grid_res):
                                          randomize_parameter=1e-4,
                                          info_string_every=10)
 
-    optimizer = {
-        'Adam':{
-            'lr':[1e-2, 1e-3, 1e-4],
-            'epochs':[100, 1000, 2500]
-        },
-        'LBFGS':{
-            'lr':[1, 5e-1, 1e-1],
-            'epochs':[100, 500, 1500]
-        },
-        'PSO':{
-            'lr':[0.0, 1e-3, 1e-4],
-            'epochs':[100, 200, 300]
-        },
-    }
+    optim_param = {'history_size': 100,
+                    "line_search_fn": 'strong_wolfe',
+                    "lr": 0.5}
 
-    AE_model_params = {
-        "mode": "NN",
-        "num_of_layers": 3,
-        "layers_AE": [
-            991,
-            125,
-            15
-        ],
-        "num_models": None,
-        "from_last": False,
-        "prefix": "model-",
-        "every_nth": 1,
-        "grid_step": 0.1,
-        "d_max_latent": 2,
-        "anchor_mode": "circle",
-        "rec_weight": 10000.0,
-        "anchor_weight": 0.0,
-        "lastzero_weight": 0.0,
-        "polars_weight": 0.0,
-        "wellspacedtrajectory_weight": 0.0,
-        "gridscaling_weight": 0.0,
-        "device": device
-    }
-
-    AE_train_params = {
-        "first_RL_epoch_AE_params": {
-            "epochs": 10000,
-            "patience_scheduler": 4000,
-            "cosine_scheduler_patience": 1200,
-        },
-        "other_RL_epoch_AE_params": {
-            "epochs": 20000,
-            "patience_scheduler": 4000,
-            "cosine_scheduler_patience": 1200,
-        },
-        "batch_size": 32,
-        "every_epoch": 100,
-        "learning_rate": 5e-4,
-        "resume": True,
-        "finetune_AE_model": False
-    }
-
-    loss_surface_params = {
-        "loss_types": ["loss_total", "loss_oper", "loss_bnd"],
-        "every_nth": 1,
-        "num_of_layers": 3,
-        "layers_AE": [
-            991,
-            125,
-            15
-        ],
-        "batch_size": 32,
-        "num_models": None,
-        "from_last": False,
-        "prefix": "model-",
-        "loss_name": "loss_total",
-        "x_range": [-1.25, 1.25, 25],
-        "vmax": -1.0,
-        "vmin": -1.0,
-        "vlevel": 30.0,
-        "key_models": None,
-        "key_modelnames": None,
-        "density_type": "CKA",
-        "density_p": 2,
-        "density_vmax": -1,
-        "density_vmin": -1,
-        "colorFromGridOnly": True,
-        "img_dir": img_dir
-    }
-
-    rl_agent_params = {
-        "n_save_models": 10,
-        "n_trajectories": 1000,
-        "tolerance": 0.060776, 
-        "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
-        "min_loss_change": 1e-7,
-        "min_grad_norm": 1e-5,
-        "rl_buffer_size": 10000,
-        "rl_batch_size": 32,
-        "n_transitions_reinit" : 2000,
-        "gamma": 0.9,
-        "rl_reward_method": "absolute",
-        "exact_solution": exact_func,
-        "reward_operator_coeff": 1,
-        "reward_boundary_coeff": 1,
-        "lr": 1e-3,
-        "exp": experiment,
-    }
-
-    comparison_params = {
-        "seed": seed, 
-        "total_epochs": 5000,
-        "experiment_key": "e951e540083d415db14cd308c7e32e9d"
-    }
-
-    experiment.log_parameters(rl_agent_params)
-    experiment.log_parameters(comparison_params)
-
-
-    model.train(optimizer,
-                5e5,
+    
+    optim = Optimizer('LBFGS', optim_param)
+    model.train(optim,
+                5000,
                 save_model=True,
                 callbacks=[cb_es],
-                rl_agent_params=rl_agent_params,
                 models_concat_flag=False,
-                model_name='rl_optimization_agent',
-                equation_params=equation_params,
-                AE_model_params=AE_model_params,
-                AE_train_params=AE_train_params,
-                loss_surface_params=loss_surface_params,
-                comparison_param=comparison_params)
+                equation_params=equation_params)
     
 
     net = model.net.to(device)
