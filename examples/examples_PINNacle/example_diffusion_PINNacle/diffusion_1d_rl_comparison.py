@@ -254,7 +254,7 @@ def diffusion_1d_experiment(grid_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "fa9b67d27d164c8897efcbcfb8aa7878"
+        "experiment_key": "2aec1698a51041d4be9815d87ddab2e8"
     }
 
     experiment.log_parameters(rl_agent_params)
