@@ -143,8 +143,8 @@ def diffusion_1d_experiment(grid_res):
     cb_es = early_stopping.EarlyStopping(eps=1e-6,
                                          loss_window=100,
                                          no_improvement_patience=1000,
-                                         patience=100,
-                                         randomize_parameter=1e-4,
+                                         patience=5,
+                                         randomize_parameter=1e-6,
                                          info_string_every=10)
 
     optim_param = {'history_size': 100,

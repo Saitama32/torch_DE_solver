@@ -143,8 +143,8 @@ def diffusion_1d_experiment(grid_res):
     cb_es = early_stopping.EarlyStopping(eps=1e-6,
                                          loss_window=100,
                                          no_improvement_patience=1000,
-                                         patience=100,
-                                         randomize_parameter=1e-4,
+                                         patience=5,
+                                         randomize_parameter=1e-6,
                                          info_string_every=10)
 
     optimizer = {
@@ -254,7 +254,7 @@ def diffusion_1d_experiment(grid_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "2aec1698a51041d4be9815d87ddab2e8"
+        "experiment_key": "c0066c3104d94d1e8866e9b22d94cf9f"
     }
 
     experiment.log_parameters(rl_agent_params)
