@@ -249,7 +249,7 @@ def diffusion_1d_experiment(grid_res):
     }
 
     backup_params = {
-        "experiment_key" : "32bbbec493c843539e62cd9f3498bf6c",
+        "experiment_key" : "bc82d7a3c0114dfeaab287cfdd3b22f9",
     }
     # backup_params = None
 
