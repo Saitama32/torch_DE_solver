@@ -260,6 +260,13 @@ def heat_2d_long_time_experiment(grid_res):
         overwrite=True,
         metadata={"type": "optimizer_state"}
             )
+    
+    
+    experiment.log_parameters({
+        "seed": seed,
+        "grid_res": grid_res
+    })
+
 
     return exp_dict_list
 
