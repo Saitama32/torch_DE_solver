@@ -268,7 +268,7 @@ def heat_2d_long_time_experiment(grid_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "70772093e5724fd98d8dc332f3e741a8"
+        "experiment_key": "9418c0958c86472b819ca62517a2b952"
     }
 
     experiment.log_parameters(rl_agent_params)
