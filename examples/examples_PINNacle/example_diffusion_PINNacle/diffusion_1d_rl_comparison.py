@@ -254,7 +254,7 @@ def diffusion_1d_experiment(grid_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "7eef2a8539884caaab03e61dac561a68",
+        "experiment_key": "20399c26d121442d87eac5e9ec4fdf37",
         "grid_res": grid_res
     }
 
@@ -365,11 +365,11 @@ def diffusion_1d_experiment(grid_res):
 
 
 if __name__ == "__main__":
-    grid_res = 400
+    grid_res = 100
     # список сидов для экспериментов
-    # seeds = [678, 789, 890, 901, 1012]   # можно расширить список
+    seeds = [789, 890, 901, 1012]   # можно расширить список
     # seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
-    seeds = [123, 234, 345, 456, 567]   # можно расширить список
+    # seeds = [123, 234, 345, 456, 567]   # можно расширить список
 
     for seed in seeds:
         print(f"\n🔹 Запуск эксперимента с seed = {seed}")
