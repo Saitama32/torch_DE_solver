@@ -150,15 +150,15 @@ def diffusion_1d_experiment(grid_res):
     optimizer = {
         'Adam':{
             'lr':[1e-2, 1e-3, 1e-4],
-            'epochs':[100, 1000, 2500]
+            'epochs':[101, 1000, 2500]
         },
         'LBFGS':{
             'lr':[1, 5e-1, 1e-1],
-            'epochs':[100, 500, 1500]
+            'epochs':[101, 500, 1500]
         },
         'PSO':{
             'lr':[0.0, 1e-3, 1e-4],
-            'epochs':[100, 200, 300]
+            'epochs':[101, 200, 300]
         },
     }
 
@@ -254,7 +254,7 @@ def diffusion_1d_experiment(grid_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "c399c7de2d824f089c35aafd1210b4af",
+        "experiment_key": "4ee79b89c2eb4658856e9720cf35a34a",
         "grid_res": grid_res
     }
 
@@ -368,7 +368,8 @@ if __name__ == "__main__":
     grid_res = 400
     # список сидов для экспериментов
     # seeds = [678, 789, 890, 901, 1012]   # можно расширить список
-    seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
+    # seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
+    seeds = [123, 234, 345, 456, 567]   # можно расширить список
 
     for seed in seeds:
         print(f"\n🔹 Запуск эксперимента с seed = {seed}")

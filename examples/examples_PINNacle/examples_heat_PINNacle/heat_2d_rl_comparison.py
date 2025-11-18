@@ -164,15 +164,15 @@ def heat_2d_long_time_experiment(grid_res):
     optimizer = {
         'Adam':{
             'lr':[1e-2, 1e-3, 1e-4],
-            'epochs':[100, 1000, 2500]
+            'epochs':[101, 1000, 2500]
         },
         'LBFGS':{
             'lr':[1, 5e-1, 1e-1],
-            'epochs':[100, 500, 1500]
+            'epochs':[101, 500, 1500]
         },
         'PSO':{
             'lr':[0.0, 1e-3, 1e-4],
-            'epochs':[100, 200, 300]
+            'epochs':[101, 200, 300]
         },
     }
 
@@ -268,7 +268,7 @@ def heat_2d_long_time_experiment(grid_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "6f2efb79e97b4d1ebce7d008b9325209"
+        "experiment_key": "4ee79b89c2eb4658856e9720cf35a34a"
     }
 
     experiment.log_parameters(rl_agent_params)
@@ -381,8 +381,9 @@ def heat_2d_long_time_experiment(grid_res):
 if __name__ == "__main__":
     grid_res = 100
     # список сидов для экспериментов
-    seeds = [678, 789, 890, 901, 1012]   # можно расширить список
+    # seeds = [678, 789, 890, 901, 1012]   # можно расширить список
     # seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
+    seeds = [123, 234, 345, 456, 567]
 
     for seed in seeds:
         print(f"\n🔹 Запуск эксперимента с seed = {seed}")
