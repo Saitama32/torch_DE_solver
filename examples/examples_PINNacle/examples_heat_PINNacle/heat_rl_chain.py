@@ -247,7 +247,8 @@ def heat_2d_long_time_experiment(grid_res):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 0.0410, 
+        "tolerance": 0.0608023181557655,
+        "prev_tol": 0.060776,
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
@@ -263,10 +264,10 @@ def heat_2d_long_time_experiment(grid_res):
         "exp": experiment,
     }
 
-    # backup_params = {
-    #     "experiment_key" : "b0dae86c42924e4484b8bd194e2d58d9",
-    # }
-    backup_params = None
+    backup_params = {
+        "experiment_key" : "b7e4451415734a38890870e180d7a8e6",
+    }
+    # backup_params = None
     experiment.log_parameters(rl_agent_params)
     # experiment.log_parameters(backup_params)
 
