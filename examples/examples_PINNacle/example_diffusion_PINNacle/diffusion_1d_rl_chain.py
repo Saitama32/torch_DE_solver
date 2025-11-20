@@ -233,6 +233,7 @@ def diffusion_1d_experiment(grid_res):
         "n_save_models": 10,
         "n_trajectories": 1000,
         "tolerance": 0.00014624762116, 
+        "prev_tol": 0.000160462,
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
@@ -248,13 +249,13 @@ def diffusion_1d_experiment(grid_res):
         "exp": experiment,
     }
 
-    backup_params = {
-        "experiment_key" : "bc82d7a3c0114dfeaab287cfdd3b22f9",
-    }
-    # backup_params = None
+    # backup_params = {
+    #     "experiment_key" : "bc82d7a3c0114dfeaab287cfdd3b22f9",
+    # }
+    backup_params = None
 
     experiment.log_parameters(rl_agent_params)
-    # experiment.log_parameters(backup_params)
+    experiment.log_parameters(backup_params)
 
     model.train(optimizer,
                 5e5,
