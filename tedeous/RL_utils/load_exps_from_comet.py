@@ -68,11 +68,17 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
 
     experiments_sorted_duration = experiments_sorted_duration[:max_exps_last]
 
-    experiments_sorted_tol = [
-        exp for exp in experiments_sorted_duration 
-        if float(get_param_value(exp, "tolerance", 0.0)) >= tolerance
-    ]
+    if prev_tol>0.0:
 
+        experiments_sorted_tol = [
+            exp for exp in experiments_sorted_duration 
+            if float(get_param_value(exp, "tolerance", 0.0)) >= prev_tol
+        ]
+    else:
+        experiments_sorted_tol = [
+            exp for exp in experiments_sorted_duration 
+            if float(get_param_value(exp, "tolerance", 0.0)) >= tolerance
+        ]
     print(f"✅ Найдено {len(experiments_sorted_tol)} активных экспериментов для загрузки буферов.\n")
 
     all_transitions = []  # сюда соберём всё
