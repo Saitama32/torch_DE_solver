@@ -167,6 +167,8 @@ def shift_done_rewards(transitions, shift_value=50):
     Увеличивает model_reward на shift_value для всех переходов, где done == 1.
     Возвращает изменённый список transitions.
     """
+    print(f"\n🔧 Сдвигаем reward_model на {shift_value} для всех успешных переходов (done=1)...")
+    count = 0
 
     for tr in transitions:
         if int(tr.get("done", 0)) == 1:
@@ -174,10 +176,13 @@ def shift_done_rewards(transitions, shift_value=50):
             if "reward_model" in tr:
                 try:
                     tr["reward_model"] = float(tr["reward_model"]) + shift_value
+                    count += 1
                 except:
                     print("⚠️ Не удалось преобразовать reward_model в float:", tr["reward_model"])
             else:
                 print("⚠️ У перехода нет поля reward_model", tr)
+
+    print(f"✅ Сдвинуто reward_model для {count} успешных переходов.")
 
     return transitions
 
