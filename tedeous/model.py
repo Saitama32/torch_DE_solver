@@ -532,6 +532,7 @@ class Model():
 
                     if solver_models is None:
                         print("Solver models are None!!!")
+                    
 
                     if len(solver_models) < rl_agent_params['n_save_models']:
                         print(f"Current number of solver models: {len(solver_models)}. "
@@ -626,6 +627,7 @@ class Model():
 
                     print(f"Operator L2RE: {operator_l2re}, Boundary L2RE: {boundary_l2re}")
 
+                    env.solver_models = solver_models
                     # Передаём ошибки в Env
                     env.reward_params = {
                         "operator": {
