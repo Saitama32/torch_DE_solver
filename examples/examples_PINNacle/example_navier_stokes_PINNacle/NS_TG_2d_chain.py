@@ -414,6 +414,6 @@ def navier_stokes_2d_TG_vortex_experiment(grid_res):
 
 
 if __name__ == "__main__":
-    grid_res = 100
+    grid_res = 70
 
     navier_stokes_2d_TG_vortex_experiment(grid_res)
