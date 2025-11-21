@@ -145,8 +145,10 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
     # tolerance =0.0608023 
     # prev_tol= 0.060776
     if tolerance > prev_tol:
-
         all_transitions = truncate_success_chains(all_transitions, current_tol=tolerance, prev_tol= prev_tol)
+
+    # --- Сдвиг наград для успешных переходов ---
+    all_transitions = shift_done_rewards(all_transitions, shift_value=50)
 
     print(f"\n🚀 Всего собрано {len(all_transitions)} переходов из {len(experiments_sorted_duration)} экспериментов.")
     if not all_transitions:
@@ -158,6 +160,27 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
 
     # print(f"\n✅ Финальный буфер содержит {len(replay_buffer)} переходов.")
     return replay_buffer
+
+
+def shift_done_rewards(transitions, shift_value=50):
+    """
+    Увеличивает model_reward на shift_value для всех переходов, где done == 1.
+    Возвращает изменённый список transitions.
+    """
+
+    for tr in transitions:
+        if int(tr.get("done", 0)) == 1:
+            # Убедиться, что reward_model существует
+            if "reward_model" in tr:
+                try:
+                    tr["reward_model"] = float(tr["reward_model"]) + shift_value
+                except:
+                    print("⚠️ Не удалось преобразовать reward_model в float:", tr["reward_model"])
+            else:
+                print("⚠️ У перехода нет поля reward_model", tr)
+
+    return transitions
+
 
 
 def truncate_success_chains(transitions, current_tol=0.0608023, prev_tol= 0.060776):
