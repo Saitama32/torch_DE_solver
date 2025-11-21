@@ -435,7 +435,7 @@ class Model():
             # rl_agent.n_transitions_reinit = 1000
             # rl_agent.replay_buffer = PrioritizedReplayBuffer(rl_agent_params["rl_buffer_size"])
 
-            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=75)
+            # rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=75)
             if backup_params is not None:
                 optim_state, params_state = load_rl_agent_from_comet(backup_params["experiment_key"], map_location=device_type())
                 rl_agent.model_optim.load_state_dict(optim_state)
@@ -540,40 +540,100 @@ class Model():
                     net = self.net.to(device_type())
 
                     if callable(rl_agent_params["exact_solution"]):
-                        operator_rmse = torch.sqrt(
-                            torch.mean((rl_agent_params["exact_solution"](grid).reshape(-1, 1) - net(grid)) ** 2)
-                        )
-                    else:
-                        exact = exact_solution_data(grid, rl_agent_params["exact_solution"],
-                                                    equation_params[-1][0], equation_params[-1][-1],
-                                                    t_dim_flag='t' in list(self.domain.variable_dict.keys()))
-                        net_predicted = net(grid)
-                        operator_rmse = torch.sqrt(torch.mean((exact.reshape(-1, 1) - net_predicted) ** 2))
+                        # --- Старый случай: одно решение ---
+                        exact = rl_agent_params["exact_solution"](grid).reshape(-1, 1)
+                        pred = net(grid)
 
-                    boundary_rmse_lst = []
+                        operator_l2re = torch.linalg.norm(exact - pred) / (torch.linalg.norm(exact) + 1e-12)
+
+                    else:
+                        # --- Новый случай: список функций [u_exact, v_exact, p_exact, ...] ---
+                        exact_funcs = rl_agent_params["exact_solution"]
+
+                        if not isinstance(exact_funcs, (list, tuple)):
+                            raise ValueError(
+                                "exact_solution must be either callable or a list of callables representing each component."
+                            )
+
+                        net_predicted = net(grid)                      # shape: [N, n_vars]
+                        n_vars = len(exact_funcs)
+
+                        if net_predicted.shape[1] != n_vars:
+                            raise ValueError(
+                                f"Network outputs {net_predicted.shape[1]} vars but exact solution list has {n_vars} functions."
+                            )
+
+                        exact_list = []
+                        pred_list = []
+
+                        for i, f_exact in enumerate(exact_funcs):
+                            if not callable(f_exact):
+                                raise ValueError(f"Exact solution entry at index {i} is not callable.")
+
+                            exact_i = f_exact(grid).reshape(-1)
+                            pred_i = net_predicted[:, i].reshape(-1)
+
+                            exact_list.append(exact_i)
+                            pred_list.append(pred_i)
+
+                        exact_all = torch.stack(exact_list, dim=1)      # [N, n_vars]
+                        pred_all  = torch.stack(pred_list,  dim=1)
+
+                        # === L2RE EXACT SOLUTION FOR PDE OPERATOR ===
+                        numerator   = torch.linalg.norm(exact_all - pred_all)
+                        denominator = torch.linalg.norm(exact_all) + 1e-12
+
+                        operator_l2re = numerator / denominator
+
+
+                    # ==== BOUNDARY ERROR (L2RE) =====================================================
+
+                    boundary_l2re_list = []
+
                     for b in bconds:
                         if isinstance(b["bnd"], torch.Tensor):
                             bnd_lst = [b["bnd"]]
+                        else:
+                            continue
+
                         for bnd in bnd_lst:
-                            net_bnd = net(bnd)
-                            try:
-                                result = (b["bval"].reshape_as(net_bnd) - net_bnd) ** 2
-                            except:
-                                result = (torch.full(net_bnd.shape, b["bval"].item()) - net_bnd) ** 2
-                            boundary_rmse_lst.append(torch.sqrt(torch.mean(result)))
+                            net_bnd = net(bnd)        # [Nb, n_vars] or [Nb,1]
 
-                    boundary_rmse = torch.sum(torch.stack(boundary_rmse_lst))
+                            # ------ Граничные значения (bval) ------
+                            if callable(rl_agent_params["exact_solution"]):
+                                # старый случай
+                                exact_bnd = b["bval"].reshape_as(net_bnd)
 
-                    print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
+                            else:
+                                # новый случай: список функций
+                                exact_bnd_list = []
+                                for f_exact in exact_funcs:
+                                    exact_bnd_i = f_exact(bnd).reshape(-1)
+                                    exact_bnd_list.append(exact_bnd_i)
 
-                    env.solver_models = solver_models
+                                exact_bnd = torch.stack(exact_bnd_list, dim=1)  # [Nb, n_vars]
+
+                            # ==== L2RE по границе ====
+                            num = torch.linalg.norm(exact_bnd - net_bnd)
+                            den = torch.linalg.norm(exact_bnd) + 1e-12
+                            boundary_l2re_list.append(num / den)
+
+                    # Итоговая граничная ошибка
+                    if boundary_l2re_list:
+                        boundary_l2re = torch.mean(torch.stack(boundary_l2re_list))
+                    else:
+                        boundary_l2re = torch.tensor(0.0)
+
+                    print(f"Operator L2RE: {operator_l2re}, Boundary L2RE: {boundary_l2re}")
+
+                    # Передаём ошибки в Env
                     env.reward_params = {
                         "operator": {
-                            "error": operator_rmse.detach().cpu(),
+                            "error": operator_l2re.detach().cpu(),
                             "coeff": rl_agent_params["reward_operator_coeff"]
                         },
                         "bconds": {
-                            "error": boundary_rmse.detach().cpu(),
+                            "error": boundary_l2re.detach().cpu(),
                             "coeff": rl_agent_params["reward_boundary_coeff"]
                         }
                     }
