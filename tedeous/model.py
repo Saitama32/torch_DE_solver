@@ -618,7 +618,7 @@ class Model():
                         # reward -= 0.01 * i
                         pass
                     elif done == -1:
-                        reward_model_i -= 10
+                        reward_model_i = -5
 
                     # if i != 0:
                     #     rl_agent.push_memory((state, next_state, action_raw, reward))
