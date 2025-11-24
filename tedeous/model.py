@@ -604,12 +604,12 @@ class Model():
                     reward_model_i -= 0.05 * i
 
                     if done == 1:
-                        reward_model_i += 100 # поменяли на меньшую награду
+                        reward_model_i += 10 # поменяли на меньшую награду
                     elif done == 0:
                         # reward -= 0.01 * i
                         pass
                     elif done == -1:
-                        reward_model_i -= 10
+                        reward_model_i = -5
 
                     # if i != 0:
                     #     rl_agent.push_memory((state, next_state, action_raw, reward))
