@@ -147,7 +147,7 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
         all_transitions = truncate_success_chains(all_transitions, current_tol=tolerance, prev_tol= prev_tol)
 
     # --- Сдвиг наград для успешных переходов ---
-    all_transitions = shift_done_rewards(all_transitions, shift_value=100)
+    all_transitions = shift_done_rewards(all_transitions,  done = -1, shift_value= -5)
 
     print(f"\n🚀 Всего собрано {len(all_transitions)} переходов из {len(experiments_sorted_duration)} экспериментов.")
     if not all_transitions:
@@ -161,7 +161,7 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
     return replay_buffer
 
 
-def shift_done_rewards(transitions, shift_value=50):
+def shift_done_rewards(transitions, done = 1, shift_value= -5):
     """
     Увеличивает model_reward на shift_value для всех переходов, где done == 1.
     Возвращает изменённый список transitions.
@@ -170,16 +170,29 @@ def shift_done_rewards(transitions, shift_value=50):
     count = 0
 
     for tr in transitions:
-        if int(tr.get("done", 0)) == 1:
-            # Убедиться, что reward_model существует
-            if "reward_model" in tr:
-                try:
-                    tr["reward_model"] = float(tr["reward_model"]) + shift_value
-                    count += 1
-                except:
-                    print("⚠️ Не удалось преобразовать reward_model в float:", tr["reward_model"])
-            else:
-                print("⚠️ У перехода нет поля reward_model", tr)
+        if done == 1:
+            if int(tr.get("done", 0)) == done:
+                # Убедиться, что reward_model существует
+                if "reward_model" in tr:
+                    try:
+                        tr["reward_model"] = float(tr["reward_model"]) + shift_value
+                        count += 1
+                    except:
+                        print("⚠️ Не удалось преобразовать reward_model в float:", tr["reward_model"])
+                else:
+                    print("⚠️ У перехода нет поля reward_model", tr)
+        if done == -1:
+             if int(tr.get("done", 0)) == done:
+                # Убедиться, что reward_model существует
+                if "reward_model" in tr:
+                    try:
+                        tr["reward_model"] =  shift_value
+                        count += 1
+                    except:
+                        print("⚠️ Не удалось преобразовать reward_model в float:", tr["reward_model"])
+                else:
+                    print("⚠️ У перехода нет поля reward_model", tr)
+
 
     print(f"✅ Сдвинуто reward_model для {count} успешных переходов.")
 
