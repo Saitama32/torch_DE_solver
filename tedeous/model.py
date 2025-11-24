@@ -604,7 +604,7 @@ class Model():
                     reward_model_i -= 0.05 * i
 
                     if done == 1:
-                        reward_model_i += 50 # поменяли на меньшую награду
+                        reward_model_i += 100 # поменяли на меньшую награду
                     elif done == 0:
                         # reward -= 0.01 * i
                         pass

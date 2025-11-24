@@ -147,7 +147,7 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
         all_transitions = truncate_success_chains(all_transitions, current_tol=tolerance, prev_tol= prev_tol)
 
     # --- Сдвиг наград для успешных переходов ---
-    all_transitions = shift_done_rewards(all_transitions, shift_value=50)
+    all_transitions = shift_done_rewards(all_transitions, shift_value=100)
 
     print(f"\n🚀 Всего собрано {len(all_transitions)} переходов из {len(experiments_sorted_duration)} экспериментов.")
     if not all_transitions:
