@@ -45,7 +45,7 @@ def is_crashed(exp):
 
 
 # === Основная функция ===
-def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None) -> PrioritizedReplayBuffer:
+def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None, tolerance = 0.0, prev_tol=0.0) -> PrioritizedReplayBuffer:
     """Собирает все переходы из не-crashed экспериментов проекта и возвращает заполненный PrioritizedReplayBuffer."""
     print("🔍 Получаем эксперименты из Comet...")
     experiments = list(api.get_experiments(workspace=WORKSPACE, project_name=PROJECT_NAME))
@@ -121,16 +121,12 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
 
             except Exception as e:
                 print(f"   ❌ Ошибка при чтении {filename}: {e}")
-<<<<<<< HEAD
-=======
-    # tolerance =0.0608023 
-    # prev_tol= 0.060776
+
     if tolerance > prev_tol:
         all_transitions = truncate_success_chains(all_transitions, current_tol=tolerance, prev_tol= prev_tol)
 
     # --- Сдвиг наград для успешных переходов ---
     all_transitions = shift_done_rewards(all_transitions,  done = -1, shift_value= -5)
->>>>>>> 7f22939 (Add ability to shift all dones and changes rewards)
 
     print(f"\n🚀 Всего собрано {len(all_transitions)} переходов из {len(experiments_sorted_duration)} экспериментов.")
     if not all_transitions:
@@ -144,8 +140,6 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
     return replay_buffer
 
 
-<<<<<<< HEAD
-=======
 def shift_done_rewards(transitions, done = 1, shift_value= -5):
     """
     Увеличивает model_reward на shift_value для всех переходов, где done == 1.
@@ -257,7 +251,6 @@ def truncate_success_chains(transitions, current_tol=0.0608023, prev_tol= 0.0607
 
 
 
->>>>>>> 7f22939 (Add ability to shift all dones and changes rewards)
 # === Точка входа ===
 # if __name__ == "__main__":
 #     buffer = collect_all_comet_transitions(PrioritizedReplayBuffer(capacity=100000), 75)
