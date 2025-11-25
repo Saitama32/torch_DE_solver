@@ -584,6 +584,15 @@ class Model():
                     # input weights (for generate state) and loss (for calculate reward) to step method
                     # first getting current models and current losses
                     next_state, reward, done, _ = env.step()
+
+                    # Информация о разности состояний в начале оптимизации и в конце
+                    raw_delta = next_state["loss_total"] - state["loss_total"]
+
+                    delta = torch.sign(raw_delta) * torch.log1p(torch.abs(raw_delta))
+                    delta = delta / (delta.abs().max() + 1e-6)
+                    delta = delta.clamp(-1, 1)
+
+                    next_state["delta"] = delta
                     
                     reward_scalar = reward.item()  # предполагаем, что reward — скаляр
 

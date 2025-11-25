@@ -153,9 +153,17 @@ class DQNAgent:
         )
 
     def _stack_state(self, st):
-    # dict {'loss_oper': Tensor[676], 'loss_bnd': Tensor[676]} -> Tensor[2,26,26]
-        x = torch.cat((st['loss_oper'].to(self.device), st['loss_bnd'].to(self.device)), 0)
-        return x.view(2, 26, 26)
+        total = st['loss_total'].to(self.device)
+        oper  = st['loss_oper'].to(self.device)
+        bnd   = st['loss_bnd'].to(self.device)
+
+        if 'delta' in st:
+            delta = st['delta'].to(self.device)
+        else:
+            delta = torch.zeros_like(total)
+
+        x = torch.stack((total, oper, bnd, delta), dim=0)   # (4,26,26)
+        return x
 
     def _get_param_act_idx(self, action_i, pname):
         """
@@ -541,37 +549,57 @@ class DQNAgent:
     
     # Action function stub
     def select_action(self, state):
-        with torch.no_grad():
-            # state = state['loss_total'].to(self.device)
-            state = torch.cat((state['loss_oper'], state['loss_bnd']), 0).to(self.device)
-            sample = random.random()
-            eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-                            math.exp(-1. * self.steps_done / EPS_DECAY)
-            self.steps_done += 1
-            # sample = 0.5 # hardcoded for testing purposes
-            # eps_threshold = 1 # hardcoded for testing purposes
-            if self.steps_done < self.slot_bootstrap_steps:
-                eps_threshold = self.slot_bootstrap_eps
-            if sample > eps_threshold:
-                with torch.no_grad():
-                    # t.max(1) will return the largest column value of each row.
-                    # second column on max result is index of where max element was
-                    # found, so we pick action with the larger expected reward.
-                    state = state.reshape((1, -1, 26, 26))
-                    # x_optim, x_loss, x_epochs = self.model(state)
-                    # x_optim, x_loss, x_epochs = torch.argmax(x_optim), torch.argmax(x_loss), torch.argmax(x_epochs)
-                    liner_out, x = self.model_optim(state)
-                    optim_class = int(torch.argmax(x).item())
-                    optim_class_name = self.i2opt[optim_class]
-                    param_class = {}
-                    param_dict = self.model_params(liner_out, [optim_class_name])[0]
-                    for key in param_dict:
-                        if key == 'epochs': epochs_class = torch.argmax(param_dict[key]).item()
-                        else: param_class[key] = torch.argmax(param_dict[key]).item()
-            else:
-                optim_class, epochs_class, param_class = self.get_random_action()
-            action = self.post_proc_model(int(optim_class), epochs_class, param_class)
-            return action, (int(optim_class), epochs_class, param_class), sample > eps_threshold
+
+        # собрать 4-канальное состояние
+        if "delta" not in state:
+            delta = torch.zeros_like(state["loss_total"])
+        else:
+            delta = state["delta"]
+
+        state_tensor = torch.stack([
+            state["loss_total"],
+            state["loss_oper"],
+            state["loss_bnd"],
+            delta
+        ], dim=0).to(self.device)
+
+        # сделать батч: (1,4,26,26)
+        state_tensor = state_tensor.unsqueeze(0)
+
+        # eps-greedy
+        sample = random.random()
+        eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * self.steps_done / EPS_DECAY)
+        self.steps_done += 1
+
+        if self.steps_done < self.slot_bootstrap_steps:
+            eps_threshold = self.slot_bootstrap_eps
+
+        # --- GREEDY ---
+        if sample > eps_threshold:
+            with torch.no_grad():
+                liner_out, q_opt = self.model_optim(state_tensor)
+                optim_class = int(torch.argmax(q_opt).item())
+
+                optim_name = self.i2opt[optim_class]
+
+                param_class = {}
+                param_dict = self.model_params(liner_out, [optim_name])[0]
+
+                for key in param_dict:
+                    if key == 'epochs':
+                        epochs_class = int(torch.argmax(param_dict[key]).item())
+                    else:
+                        param_class[key] = int(torch.argmax(param_dict[key]).item())
+
+        # --- EPSILON RANDOM ---
+        else:
+            optim_class, epochs_class, param_class = self.get_random_action()
+
+        # оформить action в формате твоего пайплайна
+        action_dict = self.post_proc_model(optim_class, epochs_class, param_class)
+
+        return action_dict, (optim_class, epochs_class, param_class), sample > eps_threshold
+
 
     def render_Q_function(self):            
         
