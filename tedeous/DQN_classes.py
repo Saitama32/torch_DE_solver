@@ -8,8 +8,8 @@ class ConvEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.backbone = nn.Sequential(
-            nn.Conv2d(2, 32, 3, stride = 3, padding=1),
-            nn.Conv2d(32, 64, 3, stride = 2, padding=1), 
+            nn.Conv2d(4, 32, 3, stride=3, padding=1),
+            nn.Conv2d(32, 64, 3, stride=2, padding=1),
             nn.Conv2d(64, 64, 3, padding=1),
         )
         self.gap  = nn.AdaptiveAvgPool2d(1)
