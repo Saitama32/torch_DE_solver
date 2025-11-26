@@ -435,7 +435,7 @@ class Model():
             # rl_agent.n_transitions_reinit = 1000
             # rl_agent.replay_buffer = PrioritizedReplayBuffer(rl_agent_params["rl_buffer_size"])
 
-            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=150, tolerance = rl_agent_params["tolerance"],prev_tol= rl_agent_params["prev_tol"])
+            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=150, tolerance = rl_agent_params["tolerance"], prev_tol= rl_agent_params["prev_tol"])
             if backup_params is not None:
                 optim_state, params_state = load_rl_agent_from_comet(backup_params["experiment_key"], map_location=device_type())
                 rl_agent.model_optim.load_state_dict(optim_state)
@@ -612,19 +612,30 @@ class Model():
                     reward_model_i_raw = reward_model_i
                     reward_model_i -= 0.05 * i
 
+                    # if done == 1:
+                    #     reward_model_i += 10 # поменяли на меньшую награду
+                    # elif done == 0:
+                    #     # reward -= 0.01 * i
+                    #     pass
+                    # elif done == -1:
+                    #     reward_model_i = -5
+
+                    opt_model_i = rl_agent.opt_step
+
+                    reward_scalar -= 0.05 * i
                     if done == 1:
-                        reward_model_i += 10 # поменяли на меньшую награду
+                        reward_scalar += 10 # поменяли на меньшую награду
                     elif done == 0:
                         # reward -= 0.01 * i
                         pass
                     elif done == -1:
-                        reward_model_i = -5
+                        reward_scalar = -5
 
                     # if i != 0:
                     #     rl_agent.push_memory((state, next_state, action_raw, reward))
                     # else:
                     #     rl_agent.steps_done -= 1
-                    rl_agent.push_memory((state, next_state, action_raw, float(reward_model_i), \
+                    rl_agent.push_memory((state, next_state, action_raw, float(reward_scalar), \
                                           done, float(reward_model_i), opt_model_i))
                     # for _ in range(32):
                     #     rl_agent.push_memory((state, next_state, dqn_class, reward))
@@ -637,7 +648,7 @@ class Model():
                             'state': state,
                             'next_state': next_state,
                             'action': action_raw,
-                            'reward': float(reward),
+                            'reward': float(reward_scalar),
                             'done': done, 
                             'reward_model_raw': float(reward_model_i_raw),
                             'reward_model': float(reward_model_i),

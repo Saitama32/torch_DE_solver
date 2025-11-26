@@ -45,7 +45,7 @@ def to_cpu(obj):
         return t(to_cpu(v) for v in obj)
     return obj
 
-def load_transitions_to_replay_buffer(replay_buffer, source, learn_or_analyze="learn", prev_tol=0.0, current_tol=0.0):
+def load_transitions_to_replay_buffer(replay_buffer, source, learn_or_analyze="analyze", prev_tol=0.0, current_tol=0.0):
     """
     Загружает переходы в replay_buffer.
     Может принимать:
