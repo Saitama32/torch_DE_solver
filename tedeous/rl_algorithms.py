@@ -23,7 +23,7 @@ import tempfile
 
 
 GAMMA = 0.95
-EPS_START = 0.4
+EPS_START = 0.5
 EPS_END = 0.05
 EPS_DECAY = 1000
 TAU = 0.01
@@ -32,7 +32,7 @@ TAU = 0.01
 class DQNAgent:
     def __init__(self, n_observation=None, n_action=None, optimizer_dict=None, lr=1e-3, gamma=0.95, epsilon=1.0,
                  epsilon_decay=0.995, epsilon_min=0.01, memory_size=10000, batch_size=128, n_transitions_reinit = 2000, per_alpha =  0.6, per_beta0 = 0.4, device='cpu', exp=None,
-                 warmup_updates: int = 10, recalc_batch_size: int = 32,):
+                 warmup_updates: int = 30, recalc_batch_size: int = 32,):
         self.n_observation = n_observation
         self.n_action = n_action
         self.gamma = gamma
