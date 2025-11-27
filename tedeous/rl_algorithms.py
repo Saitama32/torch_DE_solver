@@ -77,6 +77,14 @@ class DQNAgent:
         self.per_beta_inc = (1.0 - per_beta0) / 100000.0
         self.replay_buffer = PrioritizedReplayBuffer(memory_size, alpha=per_alpha)
 
+        # --- Success replay (один буфер, логическая подселекция) ---
+        # Доля последовательностей, которые берем из успешных эпизодов
+        self.success_frac = 0.3          # например, 30% батча
+        # Порог по model_reward, > которого done==1 считаем успехом
+        self.success_reward_threshold = 0.0
+        # прокидываем порог в буфер
+        self.replay_buffer.success_threshold = self.success_reward_threshold
+
         #warmup
         self.warmup_updates_total = warmup_updates
         self.warmup_updates_done = 0
@@ -183,13 +191,69 @@ class DQNAgent:
     #     return clean_buffer
 
     def _sample_sequences(self, batch_size, L, uniform: bool, beta=None):
+        """
+        Сэмплируем последовательности из буфера.
+        - При uniform=True (warmup) берём только обычные sequence-выборки.
+        - При uniform=False (основное обучение) мешаем:
+            * часть батча из обычного PER (по приоритетам)
+            * часть батча из успешных эпизодов (success_sequences),
+              если такие есть и success_frac > 0.
+        """
         rb = self.replay_buffer
-        # всегда используем нативный метод из буфера
+
+        # --- Warmup: только uniform-выборка ---
         if uniform:
             seqs, idxs, is_w = rb.sample_sequences(batch_size, L, beta=None, uniform=True, device=self.device)
-        else:
+            return seqs, idxs, is_w
+
+        # --- Основной режим: PER + при необходимости success-эпизоды ---
+        if self.success_frac <= 0.0 or not rb.success_indexes:
+            # если success-режим выключен или ещё нет успешных эпизодов
             seqs, idxs, is_w = rb.sample_sequences(batch_size, L, beta=beta, uniform=False, device=self.device)
-        return seqs, idxs, is_w
+            return seqs, idxs, is_w
+
+        # Сколько последовательностей взять из success-эпизодов
+        n_succ = int(batch_size * self.success_frac)
+        n_succ = max(1, n_succ)           # минимум одна
+        n_succ = min(n_succ, batch_size)  # но не больше батча
+
+        n_main = batch_size - n_succ
+        if n_main <= 0:
+            # крайний случай: весь батч из success
+            n_main = 0
+            n_succ = batch_size
+
+        seqs_all = []
+        idxs_all = []
+        isw_all  = []
+
+        # 1) Основная часть — обычный PER по стартовым индексам
+        if n_main > 0:
+            main_seqs, main_idxs, main_is_w = rb.sample_sequences(
+                n_main, L, beta=beta, uniform=False, device=self.device
+            )
+            seqs_all.extend(main_seqs)
+            idxs_all.append(main_idxs.to(torch.long))
+            isw_all.append(main_is_w.to(self.device))
+
+        # 2) Success-последовательности (равномерно по success_indexes)
+        if n_succ > 0:
+            succ_seqs, succ_idxs, succ_is_w = rb.sample_success_sequences(
+                n_succ, L, device=self.device
+            )
+            seqs_all.extend(succ_seqs)
+            idxs_all.append(succ_idxs.to(torch.long))
+            isw_all.append(succ_is_w.to(self.device))
+
+        # 3) Склеиваем индексы и веса в тензоры
+        idxs_cat = torch.cat(idxs_all, dim=0)
+        isw_cat  = torch.cat(isw_all, dim=0)
+
+        # На всякий случай контролируем длину
+        assert len(seqs_all) == batch_size, f"Expected {batch_size} seqs, got {len(seqs_all)}"
+
+        return seqs_all, idxs_cat, isw_cat
+
     
 
     def _greedy_mask(self, s_batch, a_batch):
