@@ -59,7 +59,7 @@ class DQNAgent:
         # TD
         self.lambda_ = 0.9     # λ
         self.kappa  = 0.5      # tolerance κ (0=жёсткий Watkins)
-        self.seq_len = 4   
+        self.seq_len = 10   
 
         # --- TD-нормализация для параметров ---
         self.param_td_running_std = {}   # dict: key -> EMA(std)
@@ -478,11 +478,27 @@ class DQNAgent:
             avg_len = (sum(lens) / max(len(lens), 1))
 
 
+            # seqs: список последовательностей, каждая <= L
+            # Посчитаем, сколько из них заканчиваются success-терминалом
+
+            count_seq_success = 0
+            count_seq_total   = len(seqs)
+
+            for seq in seqs:
+                last = seq[-1]
+                # тот же критерий успеха, что использует буфер
+                if (last.done == 1) and (last.model_reward > self.success_reward_threshold):
+                    count_seq_success += 1
+
+            frac_seq_success = count_seq_success / max(count_seq_total, 1)
+
+
             self.exp.log_metrics({
                 "tr_drop_frac": drop_frac,
                 "mean_abs_delta": mean_abs_delta,
                 "seq_frac_len_gt1": frac_len_gt1,
                 "seq_avg_len": avg_len,
+                "seq_frac_success": frac_seq_success
             }, step=self.steps_done)
 
 
