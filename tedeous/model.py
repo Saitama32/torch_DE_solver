@@ -477,6 +477,13 @@ class Model():
                     action_raw = (action_raw[0], action_raw[2])
                     n_steps += 1
 
+                    cur_opt = action["type"]
+                    if last_opt is None or cur_opt != last_opt:
+                        same_opt_streak = 1
+                    else:
+                        same_opt_streak += 1
+                    last_opt = cur_opt
+
                     # if n_steps == 1: # На самом первом шаге выбираем Adam
                     #     optim_class = 2
                     #     class_name = rl_agent.i2opt[optim_class]
@@ -609,6 +616,19 @@ class Model():
                         # pass
                         reward_model_i = reward_scalar - prev_reward
                     prev_reward = reward_scalar
+
+                                        # ==== ШТРАФ ЗА ДЛИННУЮ СЕРИЮ ОДНОГО ОПТИМИЗАТОРА ====
+                    REPEAT_K = 3   # порог длины серии
+                    REPEAT_PENALTY = 0.5  # штраф за каждый шаг после порога
+
+                    if same_opt_streak > REPEAT_K:
+                        # сколько шагов мы уже "пересидели" порог
+                        over = same_opt_streak - REPEAT_K
+                        # можно сделать просто -REPEAT_PENALTY, но чуть сильнее:
+                        repeat_pen = REPEAT_PENALTY * over
+                        reward_model_i -= repeat_pen
+                        # при желании можно залогировать repeat_pen куда-нибудь
+
                     reward_model_i_raw = reward_model_i
                     reward_model_i -= 0.05 * i
 
