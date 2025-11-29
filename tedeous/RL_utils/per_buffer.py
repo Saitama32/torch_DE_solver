@@ -116,25 +116,31 @@ class PrioritizedReplayBuffer:
     
     def _build_sequence_ending_at(self, end_idx: int, L: int):
         """
-        Строим последовательность длиной ≤ L, которая заканчивается переходом end_idx.
-        Идём НАЗАД по буферу, пока не встретим начало эпизода (предыдущий done!=0)
-        или не наберём L шагов. Без циклического wrap-around.
+        Строим последовательность, которая:
+        - всегда заканчивается на end_idx (обычно done=1),
+        - идёт назад максимум на L-1 шагов,
+        - НИКОГДА не пересекает границу эпизода (т.е. не включает предыдущий done!=0).
         """
         seq_rev = []
         i = end_idx
         steps = 0
+        N = len(self.memory)
+
         while i >= 0 and steps < L:
             tr = self.memory[i]
+
+            # если это не самый правый шаг и у него done != 0,
+            # значит мы дошли до конца предыдущего эпизода -> дальше не идём
+            if steps > 0 and getattr(tr, "done", 0) != 0:
+                break
+
             seq_rev.append(tr)
             steps += 1
-            # если это НЕ последний элемент (т.е. не end_idx) и done!=0,
-            # значит, начался предыдущий эпизод — останавливаемся
-            if steps > 1 and getattr(tr, "done", 0) != 0:
-                break
             i -= 1
 
         seq_rev.reverse()
         return seq_rev
+
 
 
     def sample_sequences(self, batch_size: int, L: int, beta=None, uniform=False, device='cpu'):
