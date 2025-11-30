@@ -158,7 +158,7 @@ class DQNAgent:
     def push_memory(self, rl_params, priority=None):
         tr = self.detach_transition(Transition(*rl_params))
         self.replay_buffer.push(
-            tr.state, tr.next_state, tr.action, tr.reward, tr.done, tr.model_reward, tr.opt_model_i, coef=2.0
+            tr.state, tr.next_state, tr.action, tr.reward, tr.done, tr.model_reward, tr.opt_model_i, coef=1.5
         )
 
     def _stack_state(self, st):
