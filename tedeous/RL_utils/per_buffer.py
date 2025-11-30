@@ -23,7 +23,7 @@ class PrioritizedReplayBuffer:
     def __len__(self):
         return len(self.memory)
 
-    def push(self, *args, priority=None):
+    def push(self, *args, priority=None, coeff=1.0):
         """
         args: (state, next_state, action, reward, done, model_reward, opt_model_i)
         """
@@ -31,7 +31,7 @@ class PrioritizedReplayBuffer:
 
         # --- базовый приоритет ---
         if priority is None:
-            p = max(self.prior) if self.prior else 1.0
+            p = max(self.prior) * coeff if self.prior else 1.0
         else:
             p = float(priority)
 

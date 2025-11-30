@@ -31,7 +31,7 @@ TAU = 0.01
 
 class DQNAgent:
     def __init__(self, n_observation=None, n_action=None, optimizer_dict=None, lr=1e-3, gamma=0.95, epsilon=1.0,
-                 epsilon_decay=0.995, epsilon_min=0.01, memory_size=10000, batch_size=128, n_transitions_reinit = 2000, per_alpha =  0.6, per_beta0 = 0.4, device='cpu', exp=None,
+                 epsilon_decay=0.995, epsilon_min=0.01, memory_size=50000, batch_size=128, n_transitions_reinit = 2000, per_alpha =  0.6, per_beta0 = 0.4, device='cpu', exp=None,
                  warmup_updates: int = 30, recalc_batch_size: int = 32,):
         self.n_observation = n_observation
         self.n_action = n_action
@@ -155,10 +155,10 @@ class DQNAgent:
             opt_model_i=detach_item(transition.opt_model_i)
         )
     
-    def push_memory(self, rl_params):
+    def push_memory(self, rl_params, priority=None):
         tr = self.detach_transition(Transition(*rl_params))
         self.replay_buffer.push(
-            tr.state, tr.next_state, tr.action, tr.reward, tr.done, tr.model_reward, tr.opt_model_i
+            tr.state, tr.next_state, tr.action, tr.reward, tr.done, tr.model_reward, tr.opt_model_i, coef=2.0
         )
 
     def _stack_state(self, st):
