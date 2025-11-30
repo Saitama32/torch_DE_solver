@@ -465,6 +465,10 @@ class Model():
 
                 # state = torch.tensor()
 
+                same_opt_streak = 0
+                last_opt = None
+
+
                 print('\n############################################################################' +
                       f'\nStarting trajectory {idx_traj + 1}/{rl_agent_params["n_trajectories"]} ' +
                       'with a new initial point.')
