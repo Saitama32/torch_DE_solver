@@ -241,26 +241,46 @@ class PrioritizedReplayBuffer:
         seqs = []
         idxs = []
 
-        for _ in range(batch_size):
-            end_idx = success_list[random.randint(0, N_succ - 1)]
-            seq = self._build_sequence_ending_at(end_idx, L)
+        # чтобы не зависнуть, если данные очень "кривые"
+        max_tries_per_seq = 100
 
-            # на всякий случай: если получилось пусто — fallback к стартовому варианту
-            if not seq:
-                start_idx = max(end_idx - L + 1, 0)
-                seq = self._build_sequence_from_start(start_idx, L)
+        for _ in range(batch_size):
+            seq = None
+            start_idx_for_this_seq = None
+
+            for _try in range(max_tries_per_seq):
+                end_idx = success_list[random.randint(0, N_succ - 1)]
+
+                # Строим последовательность, заканчивающуюся этим success
+                candidate = self._build_sequence_ending_at(end_idx, L)
+
+                if len(candidate) <= 1:
+                    continue
+
+                seq = candidate
+
+                # индекс первого элемента, зная end_idx и длину
+                start_idx_for_this_seq = end_idx - (len(seq) - 1)
+                start_idx_for_this_seq = max(start_idx_for_this_seq, 0)
+
+                break  # выходим из цикла попыток, последовательность найдена
+
+            if seq is None:
+            # Не смогли найти нормальную success-цепочку.
+            # Крайний случай: добиваем батч обычной последовательностью.
+                fallback_seqs, fallback_idxs, _ = self.sample_sequences(
+                    1, L, beta=None, uniform=True, device=device
+                )
+                seq = fallback_seqs[0]
+                start_idx_for_this_seq = int(fallback_idxs[0])
 
             seqs.append(seq)
-
-            # стартовый индекс последовательности — индекс первого элемента
-            # (его и будем использовать для обновления приоритетов)
-            start_idx = end_idx - (len(seq) - 1)
-            start_idx = max(start_idx, 0)
-            idxs.append(start_idx)
+            idxs.append(start_idx_for_this_seq)
 
         idxs = torch.tensor(idxs, dtype=torch.long, device=device)
         is_w = torch.ones(batch_size, dtype=torch.float, device=device)
 
         return seqs, idxs, is_w
+
 
 
