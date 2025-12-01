@@ -140,8 +140,7 @@ class PrioritizedReplayBuffer:
 
         seq_rev.reverse()
         return seq_rev
-
-
+    
 
     def sample_sequences(self, batch_size: int, L: int, beta=None, uniform=False, device='cpu'):
         """
@@ -149,71 +148,75 @@ class PrioritizedReplayBuffer:
         - seqs: list[list[Transition]] длиной B, каждая — последовательность длиной ≤L,
         - idxs: Tensor[B] стартовых индексов (их и обновляем в update_priorities),
         - is_w: Tensor[B] importance-sampling веса.
+
+        ВАЖНО:
+        - стартовые индексы выбираются только среди нетерминальных переходов,
+          у которых есть хотя бы один шаг вперёд (idx < N-1) -> цепочки не единичные.
+        - никаких добиваний батча случайными терминалами.
         """
         N = len(self.memory)
         if N == 0:
             raise RuntimeError("Buffer is empty")
 
-        # --- выбор стартовых индексов ---
+        # --- строим пул валидных стартовых индексов: done == 0 и есть следующий шаг ---
+        valid_start_idxs = [
+            i for i, tr in enumerate(self.memory[:-1])  # до N-1 включительно только N-2
+            if getattr(tr, "done", 0) == 0
+        ]
+        # если вообще нет валидных стартов — fallback: позволяем всё как раньше
+        no_valid_starts = (len(valid_start_idxs) == 0)
+
         if uniform:
-            # равномерный сэмплинг по НЕтерминальным start_idx
-            valid_idxs = []
-            tries = 0
-            max_tries = batch_size * 10  # чтобы не зациклиться, если терминалов много
+            # --- РАВНОМЕРНЫЙ СЭМПЛИНГ ---
+            if no_valid_starts:
+                # всё плохо, берём как раньше: любые индексы
+                idxs = torch.randint(0, N, (batch_size,), device=device)
+            else:
+                # выбираем только из valid_start_idxs, с повторениями при необходимости
+                if len(valid_start_idxs) >= batch_size:
+                    # без повторов можно, если пул большой
+                    chosen = random.sample(valid_start_idxs, batch_size)
+                else:
+                    # пул маленький — разрешаем повторы
+                    print("⚠️ PrioritizedReplayBuffer: uniform sampling with repeats due to small valid start pool")
+                    chosen = [random.choice(valid_start_idxs) for _ in range(batch_size)]
+                idxs = torch.tensor(chosen, dtype=torch.long, device=device)
 
-            while len(valid_idxs) < batch_size and tries < max_tries:
-                cand = torch.randint(0, N, (1,), device=device).item()
-                tr = self.memory[cand]
-                # Берём в качестве старта только НЕтерминальный переход
-                if getattr(tr, "done", 0) == 0:
-                    valid_idxs.append(cand)
-                tries += 1
-
-            # если по какой-то причине не набрали полный батч — добьём чем есть (включая терминалы)
-            if len(valid_idxs) < batch_size:
-                extra = torch.randint(0, N, (batch_size - len(valid_idxs),), device=device).tolist()
-                valid_idxs.extend(extra)
-
-            idxs = torch.tensor(valid_idxs, dtype=torch.long, device=device)
             is_w = torch.ones(batch_size, dtype=torch.float, device=device)
 
         else:
-            # PER по стартовым элементам, но тоже избегаем start_idx с done=1
+            # --- PER СЭМПЛИНГ ПО СТАРТОВЫМ ЭЛЕМЕНТАМ ---
             pr = torch.tensor(self.prior, dtype=torch.float, device=device)
             probs = (pr + self.eps) ** self.alpha
-            probs = probs / probs.sum()
 
-            valid_idxs = []
-            tries = 0
-            max_tries = batch_size * 20
+            if no_valid_starts:
+                # нет нетерминальных стартов -> классический PER по всем
+                probs = probs / probs.sum()
+            else:
+                # обнуляем вероятность для НЕвалидных стартов
+                mask = torch.zeros(N, dtype=torch.float, device=device)
+                mask[valid_start_idxs] = 1.0
+                probs = probs * mask
+                # если вдруг все веса обнулились (на всякий случай) — fallback к исходным
+                if probs.sum() <= 0:
+                    probs = (pr + self.eps) ** self.alpha
+                probs = probs / probs.sum()
 
-            while len(valid_idxs) < batch_size and tries < max_tries:
-                # сэмплим единичный индекс по распределению probs
-                cand = torch.multinomial(probs, 1, replacement=True).item()
-                tr = self.memory[cand]
-                if getattr(tr, "done", 0) == 0:
-                    valid_idxs.append(cand)
-                tries += 1
+            replacement = N < batch_size
+            idxs = torch.multinomial(probs, batch_size, replacement=replacement)
 
-            # если не набрали полный батч — добираем обычным PER с возможными терминалами
-            if len(valid_idxs) < batch_size:
-                remaining = batch_size - len(valid_idxs)
-                replacement = N < remaining
-                extra = torch.multinomial(probs, remaining, replacement=replacement).tolist()
-                valid_idxs.extend(extra)
-
-            idxs = torch.tensor(valid_idxs, dtype=torch.long, device=device)
-
-            # IS-веса по стартовой точке (классика PER)
             assert beta is not None, "beta must be provided for PER sampling"
-            weights = (N * probs[idxs]).pow(-beta)
+            # IS-веса считаем по ИСХОДНЫМ probs (как в классическом PER)
+            base_probs = (pr + self.eps) ** self.alpha
+            base_probs = base_probs / base_probs.sum()
+            weights = (N * base_probs[idxs]).pow(-beta)
             is_w = (weights / weights.max()).float()
 
         # --- сбор последовательностей ---
-        # здесь уже без изменений: для каждого стартового индекса строим последовательность вперёд
         seqs = [self._build_sequence_from_start(int(i), L) for i in idxs.tolist()]
 
         return seqs, idxs, is_w
+
 
     
     def sample_success_sequences(self, batch_size: int, L: int, device='cpu'):
