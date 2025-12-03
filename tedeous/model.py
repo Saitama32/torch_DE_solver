@@ -658,7 +658,7 @@ class Model():
 
                     # Обучаемся на каждом шаге, если в буфере достаточно записей
                     if rl_agent.replay_buffer.__len__() >= 32:
-                        rl_agent.optim_(iters=5)
+                        rl_agent.optim_(iters=8)
                     # if rl_agent.replay_buffer.__len__() >= bufer_start_i and \
                     # rl_agent.replay_buffer.__len__() % n_steps_for_optim == 0:
                     # # rl_agent.replay_buffer.__len__() % rl_agent_params["rl_batch_size"] == 0:
