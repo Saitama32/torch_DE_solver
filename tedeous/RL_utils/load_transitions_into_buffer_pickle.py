@@ -45,7 +45,7 @@ def to_cpu(obj):
         return t(to_cpu(v) for v in obj)
     return obj
 
-def load_transitions_to_replay_buffer(replay_buffer, source, learn_or_analyze="learn"):
+def load_transitions_to_replay_buffer(replay_buffer, source, learn_or_analyze="learn", prev_tol=0.0, current_tol=0.0):
     """
     Загружает переходы в replay_buffer.
     Может принимать:
@@ -83,6 +83,8 @@ def load_transitions_to_replay_buffer(replay_buffer, source, learn_or_analyze="l
         if round(reward_val, 4) in BLOCKED_ROUNDED:
             print(f"⚠️ Фильтр Burgers: reward={reward_val}")
             return
+        if prev_tol != 0.0:
+            data = modify_transition(data, prev_tol=prev_tol, current_tol=current_tol)
 
         reward_t       = torch.tensor(data['reward'], dtype=torch.float32, device='cpu')
         model_reward_t = torch.tensor(data['reward_model'], dtype=torch.float32, device='cpu')
@@ -171,6 +173,41 @@ def load_transitions_to_replay_buffer(replay_buffer, source, learn_or_analyze="l
 
     print(f"✅ Загружено {count} переходов ({count_done_1} успешных, {count_done_minus_1} неуспешных)")
     return replay_buffer
+
+
+def modify_transition(data, prev_tol=0.0, current_tol=0.0):
+    """
+    Модифицирует reward_model и done в зависимости от значения reward.
+    Условия:
+      - если abs(reward) < 0.040956 или abs(reward) > 0.041 — ничего не делаем
+      - если 0.040956 < abs(reward) < 0.041 — заменяем reward_model = reward, done = 0 (если done был 1)
+    """
+    reward = float(data.get('reward', 0.0))
+    abs_r = abs(reward)
+    if current_tol < prev_tol:
+        if prev_tol < abs_r <= current_tol:
+            print("\n=== ⚙️ Data before modification ===")
+            print({
+                'reward': data.get('reward'),
+                'reward_model': data.get('reward_model'),
+                'done': data.get('done'),
+                'opt_model_i': data.get('opt_model_i')
+            })
+
+            data['reward_model'] = reward
+            if data.get('done') == 1:
+                data['done'] = 0
+
+            print("=== ✅ Data after modification ===")
+            print({
+                'reward': data.get('reward'),
+                'reward_model': data.get('reward_model'),
+                'done': data.get('done'),
+                'opt_model_i': data.get('opt_model_i')
+            })
+            print("=" * 50)
+
+    return data
 
 
 

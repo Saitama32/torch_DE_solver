@@ -276,7 +276,12 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         "exp": experiment,
     }
 
+    backup_params = {
+        "experiment_key" : "7eef2a8539884caaab03e61dac561a68",
+    }
+
     experiment.log_parameters(rl_agent_params)
+    experiment.log_parameters(backup_params)
 
     model.train(optimizer,
                 5e5,
@@ -288,7 +293,8 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
                 equation_params=equation_params,
                 AE_model_params=AE_model_params,
                 AE_train_params=AE_train_params,
-                loss_surface_params=loss_surface_params)
+                loss_surface_params=loss_surface_params,
+                backup_params=backup_params)
 
     return exp_dict_list
 

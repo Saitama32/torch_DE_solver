@@ -22,17 +22,16 @@ from tedeous.RL_utils.logger import log_priority_to_comet
 import tempfile
 
 
-GAMMA = 0.95
 EPS_START = 0.5
 EPS_END = 0.05
-EPS_DECAY = 1000
+EPS_DECAY = 400
 TAU = 0.01
 
 
 class DQNAgent:
     def __init__(self, n_observation=None, n_action=None, optimizer_dict=None, lr=1e-3, gamma=0.95, epsilon=1.0,
-                 epsilon_decay=0.995, epsilon_min=0.01, memory_size=10000, batch_size=128, n_transitions_reinit = 2000, per_alpha =  0.6, per_beta0 = 0.4, device='cpu', exp=None,
-                 warmup_updates: int = 1, recalc_batch_size: int = 32,):
+                 epsilon_decay=0.995, epsilon_min=0.01, memory_size=50000, batch_size=128, n_transitions_reinit = 2000, per_alpha =  0.6, per_beta0 = 0.4, device='cpu', exp=None,
+                 warmup_updates: int = 50, recalc_batch_size: int = 32,):
         self.n_observation = n_observation
         self.n_action = n_action
         self.gamma = gamma
@@ -54,12 +53,12 @@ class DQNAgent:
 
         # e - greedly 
         self.slot_bootstrap_steps = 20     # первые N шагов нового запуска делаем повышенное ε
-        self.slot_bootstrap_eps = 0.7
+        self.slot_bootstrap_eps = 0.5
 
         # TD
         self.lambda_ = 0.9     # λ
         self.kappa  = 0.5      # tolerance κ (0=жёсткий Watkins)
-        self.seq_len = 4   
+        self.seq_len = 10   
 
         # --- TD-нормализация для параметров ---
         self.param_td_running_std = {}   # dict: key -> EMA(std)
@@ -77,6 +76,14 @@ class DQNAgent:
         self.per_beta  = per_beta0
         self.per_beta_inc = (1.0 - per_beta0) / 100000.0
         self.replay_buffer = PrioritizedReplayBuffer(memory_size, alpha=per_alpha)
+
+        # --- Success replay (один буфер, логическая подселекция) ---
+        # Доля последовательностей, которые берем из успешных эпизодов
+        self.success_frac = 0.3          # например, 30% батча
+        # Порог по model_reward, > которого done==1 считаем успехом
+        self.success_reward_threshold = 0.0
+        # прокидываем порог в буфер
+        self.replay_buffer.success_threshold = self.success_reward_threshold
 
         #warmup
         self.warmup_updates_total = warmup_updates
@@ -98,8 +105,8 @@ class DQNAgent:
             "EPS_DECAY": EPS_DECAY,
             "TAU": TAU
         }
-
-        self.exp.log_parameters(epsilon_and_warmap_params)
+        if self.exp is not None:
+            self.exp.log_parameters(epsilon_and_warmap_params)
 
         self.model_optim = DQN_optim(len(self.i2opt)).to(device)
         self.model_params = DQN_params(self.optimizer_dict).to(device)
@@ -147,16 +154,24 @@ class DQNAgent:
             opt_model_i=detach_item(transition.opt_model_i)
         )
     
-    def push_memory(self, rl_params):
+    def push_memory(self, rl_params, priority=None):
         tr = self.detach_transition(Transition(*rl_params))
         self.replay_buffer.push(
-            tr.state, tr.next_state, tr.action, tr.reward, tr.done, tr.model_reward, tr.opt_model_i
+            tr.state, tr.next_state, tr.action, tr.reward, tr.done, tr.model_reward, tr.opt_model_i, coeff=1.5
         )
 
     def _stack_state(self, st):
-    # dict {'loss_oper': Tensor[676], 'loss_bnd': Tensor[676]} -> Tensor[2,26,26]
-        x = torch.cat((st['loss_oper'].to(self.device), st['loss_bnd'].to(self.device)), 0)
-        return x.view(2, 26, 26)
+        total = st['loss_total'].to(self.device)
+        oper  = st['loss_oper'].to(self.device)
+        bnd   = st['loss_bnd'].to(self.device)
+
+        if 'delta' in st:
+            delta = st['delta'].to(self.device)
+        else:
+            delta = torch.zeros_like(total)
+
+        x = torch.stack((total, oper, bnd, delta), dim=0)   # (4,26,26)
+        return x
 
     def _get_param_act_idx(self, action_i, pname):
         """
@@ -176,13 +191,69 @@ class DQNAgent:
     #     return clean_buffer
 
     def _sample_sequences(self, batch_size, L, uniform: bool, beta=None):
+        """
+        Сэмплируем последовательности из буфера.
+        - При uniform=True (warmup) берём только обычные sequence-выборки.
+        - При uniform=False (основное обучение) мешаем:
+            * часть батча из обычного PER (по приоритетам)
+            * часть батча из успешных эпизодов (success_sequences),
+              если такие есть и success_frac > 0.
+        """
         rb = self.replay_buffer
-        # всегда используем нативный метод из буфера
+
+        # --- Warmup: только uniform-выборка ---
         if uniform:
             seqs, idxs, is_w = rb.sample_sequences(batch_size, L, beta=None, uniform=True, device=self.device)
-        else:
+            return seqs, idxs, is_w
+
+        # --- Основной режим: PER + при необходимости success-эпизоды ---
+        if self.success_frac <= 0.0 or not rb.success_indexes:
+            # если success-режим выключен или ещё нет успешных эпизодов
             seqs, idxs, is_w = rb.sample_sequences(batch_size, L, beta=beta, uniform=False, device=self.device)
-        return seqs, idxs, is_w
+            return seqs, idxs, is_w
+
+        # Сколько последовательностей взять из success-эпизодов
+        n_succ = int(batch_size * self.success_frac)
+        n_succ = max(1, n_succ)           # минимум одна
+        n_succ = min(n_succ, batch_size)  # но не больше батча
+
+        n_main = batch_size - n_succ
+        if n_main <= 0:
+            # крайний случай: весь батч из success
+            n_main = 0
+            n_succ = batch_size
+
+        seqs_all = []
+        idxs_all = []
+        isw_all  = []
+
+        # 1) Основная часть — обычный PER по стартовым индексам
+        if n_main > 0:
+            main_seqs, main_idxs, main_is_w = rb.sample_sequences(
+                n_main, L, beta=beta, uniform=False, device=self.device
+            )
+            seqs_all.extend(main_seqs)
+            idxs_all.append(main_idxs.to(torch.long))
+            isw_all.append(main_is_w.to(self.device))
+
+        # 2) Success-последовательности (равномерно по success_indexes)
+        if n_succ > 0:
+            succ_seqs, succ_idxs, succ_is_w = rb.sample_success_sequences(
+                n_succ, L, device=self.device
+            )
+            seqs_all.extend(succ_seqs)
+            idxs_all.append(succ_idxs.to(torch.long))
+            isw_all.append(succ_is_w.to(self.device))
+
+        # 3) Склеиваем индексы и веса в тензоры
+        idxs_cat = torch.cat(idxs_all, dim=0)
+        isw_cat  = torch.cat(isw_all, dim=0)
+
+        # На всякий случай контролируем длину
+        assert len(seqs_all) == batch_size, f"Expected {batch_size} seqs, got {len(seqs_all)}"
+
+        return seqs_all, idxs_cat, isw_cat
+
     
 
     def _greedy_mask(self, s_batch, a_batch):
@@ -406,11 +477,27 @@ class DQNAgent:
             avg_len = (sum(lens) / max(len(lens), 1))
 
 
+            # seqs: список последовательностей, каждая <= L
+            # Посчитаем, сколько из них заканчиваются success-терминалом
+
+            count_seq_success = 0
+            count_seq_total   = len(seqs)
+
+            for seq in seqs:
+                last = seq[-1]
+                # тот же критерий успеха, что использует буфер
+                if (last.done == 1) and (last.model_reward > self.success_reward_threshold):
+                    count_seq_success += 1
+
+            frac_seq_success = count_seq_success / max(count_seq_total, 1)
+
+
             self.exp.log_metrics({
                 "tr_drop_frac": drop_frac,
                 "mean_abs_delta": mean_abs_delta,
                 "seq_frac_len_gt1": frac_len_gt1,
                 "seq_avg_len": avg_len,
+                "seq_frac_success": frac_seq_success
             }, step=self.steps_done)
 
 
@@ -542,37 +629,57 @@ class DQNAgent:
     
     # Action function stub
     def select_action(self, state):
-        with torch.no_grad():
-            # state = state['loss_total'].to(self.device)
-            state = torch.cat((state['loss_oper'], state['loss_bnd']), 0).to(self.device)
-            sample = random.random()
-            eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-                            math.exp(-1. * self.steps_done / EPS_DECAY)
-            self.steps_done += 1
-            sample = 2 # hardcoded for testing purposes
-            eps_threshold = 1 # hardcoded for testing purposes
-            if self.steps_done < self.slot_bootstrap_steps:
-                eps_threshold = self.slot_bootstrap_eps
-            if sample > eps_threshold:
-                with torch.no_grad():
-                    # t.max(1) will return the largest column value of each row.
-                    # second column on max result is index of where max element was
-                    # found, so we pick action with the larger expected reward.
-                    state = state.reshape((1, -1, 26, 26))
-                    # x_optim, x_loss, x_epochs = self.model(state)
-                    # x_optim, x_loss, x_epochs = torch.argmax(x_optim), torch.argmax(x_loss), torch.argmax(x_epochs)
-                    liner_out, x = self.model_optim(state)
-                    optim_class = int(torch.argmax(x).item())
-                    optim_class_name = self.i2opt[optim_class]
-                    param_class = {}
-                    param_dict = self.model_params(liner_out, [optim_class_name])[0]
-                    for key in param_dict:
-                        if key == 'epochs': epochs_class = torch.argmax(param_dict[key]).item()
-                        else: param_class[key] = torch.argmax(param_dict[key]).item()
-            else:
-                optim_class, epochs_class, param_class = self.get_random_action()
-            action = self.post_proc_model(int(optim_class), epochs_class, param_class)
-            return action, (int(optim_class), epochs_class, param_class), sample > eps_threshold
+
+        # собрать 4-канальное состояние
+        if "delta" not in state:
+            delta = torch.zeros_like(state["loss_total"])
+        else:
+            delta = state["delta"]
+
+        state_tensor = torch.stack([
+            state["loss_total"],
+            state["loss_oper"],
+            state["loss_bnd"],
+            delta
+        ], dim=0).to(self.device)
+
+        # сделать батч: (1,4,26,26)
+        state_tensor = state_tensor.unsqueeze(0)
+
+        # eps-greedy
+        sample = random.random()
+        eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * self.steps_done / EPS_DECAY)
+        self.steps_done += 1
+
+        if self.steps_done < self.slot_bootstrap_steps:
+            eps_threshold = self.slot_bootstrap_eps
+
+        # --- GREEDY ---
+        if sample > eps_threshold:
+            with torch.no_grad():
+                liner_out, q_opt = self.model_optim(state_tensor)
+                optim_class = int(torch.argmax(q_opt).item())
+
+                optim_name = self.i2opt[optim_class]
+
+                param_class = {}
+                param_dict = self.model_params(liner_out, [optim_name])[0]
+
+                for key in param_dict:
+                    if key == 'epochs':
+                        epochs_class = int(torch.argmax(param_dict[key]).item())
+                    else:
+                        param_class[key] = int(torch.argmax(param_dict[key]).item())
+
+        # --- EPSILON RANDOM ---
+        else:
+            optim_class, epochs_class, param_class = self.get_random_action()
+
+        # оформить action в формате твоего пайплайна
+        action_dict = self.post_proc_model(optim_class, epochs_class, param_class)
+
+        return action_dict, (optim_class, epochs_class, param_class), sample > eps_threshold
+
 
     def render_Q_function(self):            
         

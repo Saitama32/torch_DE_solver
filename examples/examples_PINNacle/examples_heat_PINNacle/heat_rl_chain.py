@@ -3,96 +3,118 @@ from comet_ml.integration.pytorch import log_model
 
 experiment = start(
   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_diffusion_1d_optimization",
+  project_name="rlpinn_heat_2d_tolerance",
   workspace="saitama32"
 )
 
-
 import torch
+import numpy as np
 import os
 import sys
 import time
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../examples_diffusion')))
-
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(project_root)
 from tedeous.data import Domain, Conditions, Equation
 from tedeous.model import Model
-
-from tedeous.callbacks import early_stopping, plot, cache
+from tedeous.callbacks import cache, early_stopping, plot
 from tedeous.optimizers.optimizer import Optimizer
 from tedeous.device import solver_device
+from tedeous.utils import exact_solution_data
 
 experiment.log_parameters({
     "param": "v_1",
     "reward_function": "v_2",
-    "description": "farm_transitions_diffusion_1d_basic_RL_optimizer"
+    "description": "farm_transitions_Heat_2d_1d_basic_RL_optimizer"
 })
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 solver_device(device)
 
 
-epsilon = 1
-N = 23
+eps = 1
+N = 10
 k = torch.arange(N)
 
 
 def exact_func(grid):
-    x, t = grid[:, 0], grid[:, 1]
-    sln = torch.sum(torch.sin(k * x[:, None]) * torch.exp(-epsilon * k ** 2 * t[:, None]))
+    x, y, t = grid[:, 0], grid[:, 1], grid[:, 2]
+    sln = torch.sum((torch.sin(k * x[:, None]) + torch.sin(k * y[:, None])) * torch.exp(-k ** 2 * t[:, None]))
     return sln
 
 
-def diffusion_1d_experiment(grid_res):
+def heat_2d_long_time_experiment(grid_res):
     exp_dict_list = []
 
     x_min, x_max = 0, 2 * torch.pi
-    t_max = 0.1
+    y_min, y_max = 0, 2 * torch.pi
+    t_max = 0.01
 
-    pde_dim_in = 2
+    pde_dim_in = 3
     pde_dim_out = 1
 
     domain = Domain()
+
     domain.variable('x', [x_min, x_max], grid_res)
+    domain.variable('y', [y_min, y_max], grid_res)
     domain.variable('t', [0, t_max], 10)
+
+    domain_test = Domain()
+    grid_test_res = 80
+
+    domain_test.variable('x', [x_min, x_max], grid_test_res)
+    domain_test.variable('y', [y_min, y_max], grid_test_res)
+    domain_test.variable('t', [0, t_max], 10)
 
     boundaries = Conditions()
 
     # Initial condition: ###############################################################################################
 
     # u(x, y, 0)
-    boundaries.dirichlet({'x': [x_min, x_max], 't': 0},
-                         value=lambda grid: torch.sum(torch.sin(k * grid[:, 0][:, None])))
+    boundaries.dirichlet({'x': [x_min, x_max], 'y': [y_min, y_max], 't': 0}, value=lambda grid: torch.sum(
+        torch.sin(k * grid[:, 0][:, None]) + torch.sin(k * grid[:, 1][:, None])))
 
     # Boundary conditions (periodic): ##################################################################################
 
-    # u(0, t) = u(2*pi, t)
-    boundaries.periodic([{'x': x_min, 't': [0, t_max]},
-                         {'x': x_max, 't': [0, t_max]}])
+    # u(0, y, t) = u(2*pi, y, t)
+    boundaries.periodic([{'x': x_min, 'y': [y_min, y_max], 't': [0, t_max]},
+                        {'x': x_max, 'y': [y_min, y_max], 't': [0, t_max]}])
+
+    # u(x, 0, t) = u(x, 2*pi, t)
+    boundaries.periodic([{'x': [x_min, x_max], 'y': y_min, 't': [0, t_max]},
+                        {'x': [x_min, x_max], 'y': y_max, 't': [0, t_max]}])
 
     equation = Equation()
 
-    # Operator 1:  ut - ε1 * u_xx = 0
+    # Operator: du/dt -  epsilon * (u_xx + u_yy) = 0
 
-    diffusion_1d = {
+    heat_LT = {
         'du/dt**1':
             {
                 'coeff': 1,
-                'term': [1],
+                'term': [2],
                 'pow': 1,
                 'var': 0
             },
         '-epsilon * d2u/dx2**1':
             {
-                'coeff': -epsilon,
+                'coeff': -eps,
                 'term': [0, 0],
+                'pow': 1,
+                'var': 0
+            },
+        '-epsilon * d2u/dy2**1':
+            {
+                'coeff': -eps,
+                'term': [1, 1],
                 'pow': 1,
                 'var': 0
             }
     }
 
-    equation.add(diffusion_1d)
+    equation.add(heat_LT)
 
     neurons = 100
 
@@ -116,32 +138,25 @@ def diffusion_1d_experiment(grid_res):
 
     model_layers = [pde_dim_in, neurons, neurons, neurons, neurons, pde_dim_out]
 
-    start = time.time()
-
-    # net = mat_model(domain, equation)
-    grid_res_test = 80
-    domain_test = Domain()
-    domain_test.variable('x', [x_min, x_max], grid_res_test)
-    domain_test.variable('t', [0, t_max], 10)
-
     grid = domain.build('NN').to(device)
     grid_test = domain_test.build('NN').to(device)
-    u_exact_test = exact_func(grid).reshape(-1)
-
-    equation_params = [u_exact_test, grid_test, grid, domain, equation, boundaries, model_layers]
 
     model = Model(net, domain, equation, boundaries)
 
+    
     model.compile('autograd', lambda_operator=1, lambda_bound=100)
+    u_exact_test = exact_func(grid_test).reshape(-1)
 
-    img_dir = os.path.join(os.path.dirname(__file__), 'diffusion_1d_img')
+    equation_params = [u_exact_test, grid_test, grid, domain, equation, boundaries, model_layers]
+
+    img_dir = os.path.join(os.path.dirname(__file__), 'heat_2d_long_time_img')
 
 
     cb_es = early_stopping.EarlyStopping(eps=1e-6,
                                          loss_window=100,
                                          no_improvement_patience=1000,
-                                         patience=10,
-                                         randomize_parameter=1e-6,
+                                         patience=100,
+                                         randomize_parameter=1e-4,
                                          info_string_every=10)
 
     optimizer = {
@@ -232,8 +247,8 @@ def diffusion_1d_experiment(grid_res):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 0.000160462, 
-        "prev_tol": 0.00014624762116,
+        "tolerance": 0.0608023181557655,
+        "prev_tol": 0.060776,
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
@@ -250,12 +265,11 @@ def diffusion_1d_experiment(grid_res):
     }
 
     # backup_params = {
-    #     "experiment_key" : "bc82d7a3c0114dfeaab287cfdd3b22f9",
+    #     "experiment_key" : "b0dae86c42924e4484b8bd194e2d58d9",
     # }
     backup_params = None
-
     experiment.log_parameters(rl_agent_params)
-    experiment.log_parameters(backup_params)
+    # experiment.log_parameters(backup_params)
 
     model.train(optimizer,
                 5e5,
@@ -276,4 +290,5 @@ def diffusion_1d_experiment(grid_res):
 if __name__ == "__main__":
     grid_res = 100
 
-    exp_dict_list = diffusion_1d_experiment(grid_res)
+    exp_dict_list = heat_2d_long_time_experiment(grid_res)
+
