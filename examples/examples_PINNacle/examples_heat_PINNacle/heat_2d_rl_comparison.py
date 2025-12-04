@@ -268,7 +268,7 @@ def heat_2d_long_time_experiment(grid_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 5000,
-        "experiment_key": "2544e8a0094442a59bdef65a1752af98"
+        "experiment_key": "321eb467a7604b3a937a3ddd3c0b3513"
     }
 
     experiment.log_parameters(rl_agent_params)
@@ -382,8 +382,8 @@ if __name__ == "__main__":
     grid_res = 100
     # список сидов для экспериментов
     # seeds = [678, 789, 890, 901, 1012]   # можно расширить список
-    # seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
-    seeds = [123, 234, 345, 456, 567]
+    seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
+    # seeds = [123, 234, 345, 456, 567]
 
     for seed in seeds:
         print(f"\n🔹 Запуск эксперимента с seed = {seed}")
