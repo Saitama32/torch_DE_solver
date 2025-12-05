@@ -778,6 +778,10 @@ class Model():
             rl_agent.model_optim.load_state_dict(optim_state)
             rl_agent.model_params.load_state_dict(params_state)
 
+            same_opt_streak = 0
+            last_opt = None
+
+
             while comparison_param["total_epochs"] - optimizer_epoch > 0 and not self.stop_training:
 
                 action, action_raw, is_model = rl_agent.select_action(state)
@@ -785,6 +789,14 @@ class Model():
                 optimizer_epoch += action['epochs']
                 action_raw = (action_raw[0], action_raw[2])
                 n_steps += 1
+
+                cur_opt = action["type"]
+                if last_opt is None or cur_opt != last_opt:
+                    same_opt_streak = 1
+                else:
+                    same_opt_streak += 1
+                last_opt = cur_opt
+
 
             
                 if is_model:
@@ -863,6 +875,15 @@ class Model():
                 }
 
                 next_state, reward, done, _ = env.step()
+
+                # Информация о разности состояний в начале оптимизации и в конце
+                raw_delta = next_state["loss_total"] - state["loss_total"]
+
+                delta = torch.sign(raw_delta) * torch.log1p(torch.abs(raw_delta))
+                delta = delta / (delta.abs().max() + 1e-6)
+                delta = delta.clamp(-1, 1)
+
+                next_state["delta"] = delta
                 
                 print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
                 print(f"Total RMSE: {operator_rmse + boundary_rmse}")
