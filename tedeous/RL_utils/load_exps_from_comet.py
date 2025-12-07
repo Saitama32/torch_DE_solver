@@ -68,7 +68,8 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
     # experiments_sorted = [api.get_experiment(workspace=WORKSPACE, project_name=PROJECT_NAME, experiment='751c7ca595dd4dafb22a0cfe61c26b6f')]
 
     experiments_sorted_duration = experiments_sorted_duration[:max_exps_last]
-    if prev_tol>0.0:
+    
+    if prev_tol>0.0 and prev_tol < tolerance:
 
         experiments_sorted_tol = [
             exp for exp in experiments_sorted_duration 
