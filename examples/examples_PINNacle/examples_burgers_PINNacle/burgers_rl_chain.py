@@ -233,6 +233,7 @@ def burgers_1d_experiment(x_res, t_res):
         "n_save_models": 10,
         "n_trajectories": 1000,
         "tolerance": 0.040956, 
+        "prev_tol": 0.041, 
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
