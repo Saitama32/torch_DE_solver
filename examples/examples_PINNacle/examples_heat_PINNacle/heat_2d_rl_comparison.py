@@ -157,7 +157,7 @@ def heat_2d_long_time_experiment(grid_res):
     cb_es = early_stopping.EarlyStopping(eps=1e-6,
                                          loss_window=100,
                                          no_improvement_patience=1000,
-                                         patience=100,
+                                         patience=10,
                                          randomize_parameter=1e-4,
                                          info_string_every=10)
 
@@ -267,8 +267,8 @@ def heat_2d_long_time_experiment(grid_res):
 
     comparison_params = {
         "seed": seed, 
-        "total_epochs": 5000,
-        "experiment_key": "321eb467a7604b3a937a3ddd3c0b3513"
+        "total_epochs": 7000,
+        "experiment_key": "fb64eb13020a4ce08267f0fd59304276"
     }
 
     experiment.log_parameters(rl_agent_params)
