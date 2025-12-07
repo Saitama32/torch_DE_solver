@@ -22,16 +22,15 @@ from tedeous.RL_utils.logger import log_priority_to_comet
 import tempfile
 
 
-GAMMA = 0.95
 EPS_START = 0.5
 EPS_END = 0.05
-EPS_DECAY = 1000
+EPS_DECAY = 400
 TAU = 0.01
 
 
 class DQNAgent:
     def __init__(self, n_observation=None, n_action=None, optimizer_dict=None, lr=1e-3, gamma=0.95, epsilon=1.0,
-                 epsilon_decay=0.995, epsilon_min=0.01, memory_size=10000, batch_size=128, n_transitions_reinit = 2000, per_alpha =  0.6, per_beta0 = 0.4, device='cpu', exp=None,
+                 epsilon_decay=0.995, epsilon_min=0.01, memory_size=20000, batch_size=128, n_transitions_reinit = 2000, per_alpha =  0.6, per_beta0 = 0.4, device='cpu', exp=None,
                  warmup_updates: int = 30, recalc_batch_size: int = 32,):
         self.n_observation = n_observation
         self.n_action = n_action
@@ -59,7 +58,7 @@ class DQNAgent:
         # TD
         self.lambda_ = 0.9     # λ
         self.kappa  = 0.5      # tolerance κ (0=жёсткий Watkins)
-        self.seq_len = 4   
+        self.seq_len = 10   
 
         # --- TD-нормализация для параметров ---
         self.param_td_running_std = {}   # dict: key -> EMA(std)
@@ -77,6 +76,14 @@ class DQNAgent:
         self.per_beta  = per_beta0
         self.per_beta_inc = (1.0 - per_beta0) / 100000.0
         self.replay_buffer = PrioritizedReplayBuffer(memory_size, alpha=per_alpha)
+
+        # --- Success replay (один буфер, логическая подселекция) ---
+        # Доля последовательностей, которые берем из успешных эпизодов
+        self.success_frac = 0.3          # например, 30% батча
+        # Порог по model_reward, > которого done==1 считаем успехом
+        self.success_reward_threshold = 0.0
+        # прокидываем порог в буфер
+        self.replay_buffer.success_threshold = self.success_reward_threshold
 
         #warmup
         self.warmup_updates_total = warmup_updates
@@ -147,10 +154,10 @@ class DQNAgent:
             opt_model_i=detach_item(transition.opt_model_i)
         )
     
-    def push_memory(self, rl_params):
+    def push_memory(self, rl_params, priority=None):
         tr = self.detach_transition(Transition(*rl_params))
         self.replay_buffer.push(
-            tr.state, tr.next_state, tr.action, tr.reward, tr.done, tr.model_reward, tr.opt_model_i
+            tr.state, tr.next_state, tr.action, tr.reward, tr.done, tr.model_reward, tr.opt_model_i, coeff=1.5
         )
 
     def _stack_state(self, st):
@@ -184,13 +191,69 @@ class DQNAgent:
     #     return clean_buffer
 
     def _sample_sequences(self, batch_size, L, uniform: bool, beta=None):
+        """
+        Сэмплируем последовательности из буфера.
+        - При uniform=True (warmup) берём только обычные sequence-выборки.
+        - При uniform=False (основное обучение) мешаем:
+            * часть батча из обычного PER (по приоритетам)
+            * часть батча из успешных эпизодов (success_sequences),
+              если такие есть и success_frac > 0.
+        """
         rb = self.replay_buffer
-        # всегда используем нативный метод из буфера
+
+        # --- Warmup: только uniform-выборка ---
         if uniform:
             seqs, idxs, is_w = rb.sample_sequences(batch_size, L, beta=None, uniform=True, device=self.device)
-        else:
+            return seqs, idxs, is_w
+
+        # --- Основной режим: PER + при необходимости success-эпизоды ---
+        if self.success_frac <= 0.0 or not rb.success_indexes:
+            # если success-режим выключен или ещё нет успешных эпизодов
             seqs, idxs, is_w = rb.sample_sequences(batch_size, L, beta=beta, uniform=False, device=self.device)
-        return seqs, idxs, is_w
+            return seqs, idxs, is_w
+
+        # Сколько последовательностей взять из success-эпизодов
+        n_succ = int(batch_size * self.success_frac)
+        n_succ = max(1, n_succ)           # минимум одна
+        n_succ = min(n_succ, batch_size)  # но не больше батча
+
+        n_main = batch_size - n_succ
+        if n_main <= 0:
+            # крайний случай: весь батч из success
+            n_main = 0
+            n_succ = batch_size
+
+        seqs_all = []
+        idxs_all = []
+        isw_all  = []
+
+        # 1) Основная часть — обычный PER по стартовым индексам
+        if n_main > 0:
+            main_seqs, main_idxs, main_is_w = rb.sample_sequences(
+                n_main, L, beta=beta, uniform=False, device=self.device
+            )
+            seqs_all.extend(main_seqs)
+            idxs_all.append(main_idxs.to(torch.long))
+            isw_all.append(main_is_w.to(self.device))
+
+        # 2) Success-последовательности (равномерно по success_indexes)
+        if n_succ > 0:
+            succ_seqs, succ_idxs, succ_is_w = rb.sample_success_sequences(
+                n_succ, L, device=self.device
+            )
+            seqs_all.extend(succ_seqs)
+            idxs_all.append(succ_idxs.to(torch.long))
+            isw_all.append(succ_is_w.to(self.device))
+
+        # 3) Склеиваем индексы и веса в тензоры
+        idxs_cat = torch.cat(idxs_all, dim=0)
+        isw_cat  = torch.cat(isw_all, dim=0)
+
+        # На всякий случай контролируем длину
+        assert len(seqs_all) == batch_size, f"Expected {batch_size} seqs, got {len(seqs_all)}"
+
+        return seqs_all, idxs_cat, isw_cat
+
     
 
     def _greedy_mask(self, s_batch, a_batch):
@@ -414,11 +477,27 @@ class DQNAgent:
             avg_len = (sum(lens) / max(len(lens), 1))
 
 
+            # seqs: список последовательностей, каждая <= L
+            # Посчитаем, сколько из них заканчиваются success-терминалом
+
+            count_seq_success = 0
+            count_seq_total   = len(seqs)
+
+            for seq in seqs:
+                last = seq[-1]
+                # тот же критерий успеха, что использует буфер
+                if (last.done == 1) and (last.model_reward > self.success_reward_threshold):
+                    count_seq_success += 1
+
+            frac_seq_success = count_seq_success / max(count_seq_total, 1)
+
+
             self.exp.log_metrics({
                 "tr_drop_frac": drop_frac,
                 "mean_abs_delta": mean_abs_delta,
                 "seq_frac_len_gt1": frac_len_gt1,
                 "seq_avg_len": avg_len,
+                "seq_frac_success": frac_seq_success
             }, step=self.steps_done)
 
 

@@ -103,7 +103,7 @@ class Model():
         if os.path.exists(folder_path) and os.path.isdir(folder_path):
             pass
         else:
-            os.makedirs(folder_path)
+            os.makedirs(folder_path, exist_ok=True)
         self._save_dir = folder_path
         self.batch_size = batch_size
 
@@ -435,7 +435,7 @@ class Model():
             # rl_agent.n_transitions_reinit = 1000
             # rl_agent.replay_buffer = PrioritizedReplayBuffer(rl_agent_params["rl_buffer_size"])
 
-            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=75)
+            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=75, tolerance = rl_agent_params["tolerance"],prev_tol= rl_agent_params["prev_tol"])
             if backup_params is not None:
                 optim_state, params_state = load_rl_agent_from_comet(backup_params["experiment_key"], map_location=device_type())
                 rl_agent.model_optim.load_state_dict(optim_state)
@@ -465,6 +465,10 @@ class Model():
 
                 # state = torch.tensor()
 
+                same_opt_streak = 0
+                last_opt = None
+
+
                 print('\n############################################################################' +
                       f'\nStarting trajectory {idx_traj + 1}/{rl_agent_params["n_trajectories"]} ' +
                       'with a new initial point.')
@@ -476,6 +480,13 @@ class Model():
                     action_raw[2]['epochs'] = action_raw[1]
                     action_raw = (action_raw[0], action_raw[2])
                     n_steps += 1
+
+                    cur_opt = action["type"]
+                    if last_opt is None or cur_opt != last_opt:
+                        same_opt_streak = 1
+                    else:
+                        same_opt_streak += 1
+                    last_opt = cur_opt
 
                     # if n_steps == 1: # На самом первом шаге выбираем Adam
                     #     optim_class = 2
@@ -609,6 +620,19 @@ class Model():
                         # pass
                         reward_model_i = reward_scalar - prev_reward
                     prev_reward = reward_scalar
+
+                                        # ==== ШТРАФ ЗА ДЛИННУЮ СЕРИЮ ОДНОГО ОПТИМИЗАТОРА ====
+                    REPEAT_K = 3   # порог длины серии
+                    REPEAT_PENALTY = 0.5  # штраф за каждый шаг после порога
+
+                    if same_opt_streak > REPEAT_K:
+                        # сколько шагов мы уже "пересидели" порог
+                        over = same_opt_streak - REPEAT_K
+                        # можно сделать просто -REPEAT_PENALTY, но чуть сильнее:
+                        repeat_pen = REPEAT_PENALTY * over
+                        reward_model_i -= repeat_pen
+                        # при желании можно залогировать repeat_pen куда-нибудь
+
                     reward_model_i_raw = reward_model_i
                     reward_model_i -= 0.05 * i
 
@@ -658,7 +682,7 @@ class Model():
 
                     # Обучаемся на каждом шаге, если в буфере достаточно записей
                     if rl_agent.replay_buffer.__len__() >= 32:
-                        rl_agent.optim_(iters=1)
+                        rl_agent.optim_(iters=5)
                     # if rl_agent.replay_buffer.__len__() >= bufer_start_i and \
                     # rl_agent.replay_buffer.__len__() % n_steps_for_optim == 0:
                     # # rl_agent.replay_buffer.__len__() % rl_agent_params["rl_batch_size"] == 0:
