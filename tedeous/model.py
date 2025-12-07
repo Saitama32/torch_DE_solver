@@ -351,16 +351,8 @@ class Model():
                                 batch_size=rl_agent_params["rl_batch_size"],
                                 n_transitions_reinit = rl_agent_params["n_transitions_reinit"],
                                 exp = rl_agent_params["exp"])
-            
-            # rl_agent.model_optim.load_state_dict(torch.load(r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\new_agent_strategy\models\model_optim_step_129-129.pt'))
-            # rl_agent.model_params.load_state_dict(torch.load(r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\new_agent_strategy\models\model_params_step_129-129.pt'))
 
             state_shape = get_state_shape(loss_surface_params)
-
-            # # state = torch init -> AE_model
-            # state = torch.zeros(state_shape)
-            # total_reward = 0
-            # optimizers_history = []
 
             done = 0
             idx_traj = 0
@@ -371,69 +363,6 @@ class Model():
             variable_dict = self.domain.variable_dict
             bconds = self.conditions.build(variable_dict)
 
-            
-
-            # tupe_dqn_class = get_tup_actions(optimizers)
-            # make_legend(tupe_dqn_class, optimizers)
-
-            # while rl_agent_params['n_trajectories'] - idx_traj > 0:
-
-            # ==== PRETRAIN DQN ON OFFLINE BUFFER =========================================
-
-            # trans_dir = r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\Article_exp\data\burg_state'
-            # replay_buffer_stohastic = load_transitions_to_replay_buffer(
-            #     rl_agent.replay_buffer,                 # буфер агента
-            #     trans_dir                               # папка, где лежат transitions_*.pt
-            # )
-
-            # # rl_agent.replay_buffer = shift_model_reward(replay_buffer_stohastic, shift_value=50.0, allowed_done=[1])
-            # rl_agent.replay_buffer = replay_buffer_stohastic
-            # # # ----------------------------------------------------------------------------
-            # # 3) ПРЕДОБУЧИЛИ DQN НА ЭТИХ ПЕРЕХОДАХ
-            # K = math.ceil(len(rl_agent.replay_buffer) / rl_agent.batch_size)
-
-            # rl_agent.optim_(iters=K)                   # обучает обе головы
-            # rl_agent.reinit_target()  # хард-синхронизация после претрена
-
-            # # сбрасываем счётчики, чтоб online-фаза стартовала «с нуля»
-            # rl_agent.steps_done = 1
-            # rl_agent.opt_step   = 1
-
-            # render_q_classes_from_buffer(rl_agent, rl_agent.replay_buffer, max_states=700, strategy="all", done_filter=0,
-            #              title_suffix="all", savepath="q_classes_all_{}.png".format("after_train_agent_on_exp"))
-
-
-            # replay_buffer_stohastic_dones = filter_replay_buffer_by_done(replay_buffer_stohastic, allowed_done=[1], every_n=4)
-
-
-            # # очищаяем буфер, чтобы не мешался в online-обучении
-            # rl_agent.replay_buffer = PrioritizedReplayBuffer(rl_agent_params["rl_buffer_size"])
-            # # Загрузка прогресса
-            # trans_dir = r'C:\Users\Рустам\Documents\GitHub\torch_DE_solver_local\test\RL_experiments\Burgers\data\Danil_22_08'
-            
-            # replay_buffer_agent = load_transitions_to_replay_buffer(
-            #     PrioritizedReplayBuffer(rl_agent_params["rl_buffer_size"]),                 # буфер агента
-            #     trans_dir                               # папка, где лежат transitions_*.pt
-            # )
-
-            # replay_buffer_concat = concat_replay_buffers(replay_buffer_stohastic_dones, replay_buffer_agent)
-
-            # rl_agent.replay_buffer = shift_model_reward(replay_buffer_concat, shift_value=50.0, allowed_done=[1])
-
-            # rl_agent.replay_buffer = replay_buffer_concat
-
-            # # rl_agent.n_transitions_reinit = 500
-
-            # rl_agent.optim_()                   # обучает обе головы
-
-            # render_q_classes_from_buffer(rl_agent, rl_agent.replay_buffer, max_states=700, strategy="all", done_filter=0,
-            #                  title_suffix="all", savepath="q_classes_all_{}.png".format("after_train_agent_on_exp"))
-
-            # # сбрасываем счётчики, чтоб online-фаза стартовала «с нуля»
-            # rl_agent.steps_done = 2
-            # rl_agent.opt_step   = 2
-            # rl_agent.n_transitions_reinit = 1000
-            # rl_agent.replay_buffer = PrioritizedReplayBuffer(rl_agent_params["rl_buffer_size"])
 
             rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=150, tolerance = rl_agent_params["tolerance"],prev_tol= rl_agent_params["prev_tol"])
             if backup_params is not None:
@@ -488,34 +417,12 @@ class Model():
                         same_opt_streak += 1
                     last_opt = cur_opt
 
-                    # if n_steps == 1: # На самом первом шаге выбираем Adam
-                    #     optim_class = 2
-                    #     class_name = rl_agent.i2opt[optim_class]
-                    #     param_class = {}
-                    #     optim_class_dict = rl_agent.optimizer_dict[class_name]
-
-                    #     for key in optim_class_dict:
-                    #         if key == 'epochs': epochs_class = 0
-                    #         else:
-                    #             param_class[key] = 0
-                    #     action = rl_agent.post_proc_model(optim_class, epochs_class, param_class)
-                    #     action_raw = (optim_class, epochs_class, param_class)
-                    #     action_raw[2]['epochs'] = action_raw[1]
-                    #     action_raw = (action_raw[0], action_raw[2])
-                    
-
-                    # action_raw = tupe_dqn_class[dqn_class]
                     if is_model:
                         print("Action by model")
                     else:
                         print("Action by epsilon-greedy")
                     print(f"\naction = {action}")
-                    # i_optim, i_epochs, i_loss = action_raw
-                    # action = {
-                    #     'type': optimizers['type'][i_optim],
-                    #     'params': {'lr': optimizers['params'][i_loss]},
-                    #     'epochs': optimizers['epochs'][i_epochs]
-                    # }
+
                     if action['type'] == "LBFGS":
                         action['params']['line_search_fn'] = 'strong_wolfe'
                     optimizer = Optimizer(action['type'], action['params'])
@@ -534,10 +441,6 @@ class Model():
                         n_save_models=rl_agent_params['n_save_models'],
                         stuck_threshold=rl_agent_params['stuck_threshold']
                     )
-
-                    # if loss != loss:
-                    #     self.rl_penalty = 0
-                    #     break
 
                     env.rl_penalty = self.rl_penalty
 
@@ -765,6 +668,10 @@ class Model():
             self.t = 1
             callbacks.set_model(self)
 
+            # NEW: глобальный лучший loss и модель во всей comparison-сессии
+            best_loss_overall = float("inf")          
+            best_model_overall = copy.deepcopy(self.net)  
+
             # state = torch init -> AE_model
             callbacks.callbacks[0]._stop_dings = 0
             total_reward = 0
@@ -797,8 +704,6 @@ class Model():
                     same_opt_streak += 1
                 last_opt = cur_opt
 
-
-            
                 if is_model:
                     print("Action by model")
                 else:
@@ -823,6 +728,12 @@ class Model():
                     n_save_models=rl_agent_params['n_save_models'],
                     stuck_threshold=rl_agent_params['stuck_threshold']
                 )
+
+                # NEW: обновление глобально лучшей модели по loss
+                if loss is not None and loss < best_loss_overall:   
+                    best_loss_overall = float(loss)                  
+                    best_model_overall = copy.deepcopy(self.net)     
+
 
                 env.rl_penalty = self.rl_penalty
 
@@ -901,7 +812,14 @@ class Model():
                 
             
             optimizer = dict()
-            print('saved best model with loss: ', loss)
+            # NEW: в конце comparison-запуска подменяем self.net на лучшую модель
+            if best_loss_overall < float("inf"):                               
+                self.net = best_model_overall                                  
+                self.solution_cls._model_change(self.net)                      
+                callbacks.set_model(self)                                      
+                print('set best model with loss: ', best_loss_overall)       
+            else:                                                              
+                print('No valid loss found during comparison run.')            
 
         if isinstance(optimizer, list):
             optimizers_chain = optimizer.copy()
