@@ -154,7 +154,7 @@ def diffusion_1d_experiment(grid_res):
     
     optim = Optimizer('LBFGS', optim_param)
     model.train(optim,
-                5000,
+                7000,
                 save_model=True,
                 callbacks=[cb_es],
                 models_concat_flag=False,
@@ -256,10 +256,10 @@ def diffusion_1d_experiment(grid_res):
 
 
 if __name__ == "__main__":
-    grid_res = 400
+    grid_res = 100
     # список сидов для экспериментов
     # seeds = [678, 789, 890, 901, 1012]   # можно расширить список
-    seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012, 1123, 1234, 1345, 1456, 1567, 1678, 1789, 1890, 1901, 2012]   # можно расширить список
+    seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
 
     for seed in seeds:
         print(f"\n🔹 Запуск эксперимента с seed = {seed}")
