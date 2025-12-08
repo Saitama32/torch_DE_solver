@@ -157,7 +157,7 @@ def heat_2d_long_time_experiment(grid_res):
     cb_es = early_stopping.EarlyStopping(eps=1e-6,
                                          loss_window=100,
                                          no_improvement_patience=1000,
-                                         patience=100,
+                                         patience=5,
                                          randomize_parameter=1e-4,
                                          info_string_every=10)
 
@@ -168,7 +168,7 @@ def heat_2d_long_time_experiment(grid_res):
     
     optim = Optimizer('LBFGS', optim_param)
     model.train(optim,
-                5000,
+                7000,
                 save_model=True,
                 callbacks=[cb_es],
                 models_concat_flag=False,
@@ -272,7 +272,7 @@ def heat_2d_long_time_experiment(grid_res):
 
 
 if __name__ == "__main__":
-    grid_res = 200
+    grid_res = 100
     # список сидов для экспериментов
     seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
     # seeds = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]   # можно расширить список
