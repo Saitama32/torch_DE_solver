@@ -668,8 +668,8 @@ class Model():
             self.t = 1
             callbacks.set_model(self)
 
-            # NEW: глобальный лучший loss и модель во всей comparison-сессии
-            best_loss_overall = float("inf")          
+            # NEW: глобальный лучший rmse и модель во всей comparison-сессии
+            best_rmse_overall = float("inf")          
             best_model_overall = copy.deepcopy(self.net)  
 
             # state = torch init -> AE_model
@@ -727,12 +727,7 @@ class Model():
                     action["epochs"],
                     n_save_models=rl_agent_params['n_save_models'],
                     stuck_threshold=rl_agent_params['stuck_threshold']
-                )
-
-                # NEW: обновление глобально лучшей модели по loss
-                if loss is not None and loss < best_loss_overall:   
-                    best_loss_overall = float(loss)                  
-                    best_model_overall = copy.deepcopy(self.net)     
+                )  
 
 
                 env.rl_penalty = self.rl_penalty
@@ -770,6 +765,14 @@ class Model():
                         boundary_rmse_lst.append(torch.sqrt(torch.mean(result)))
 
                 boundary_rmse = torch.sum(torch.stack(boundary_rmse_lst))
+
+                total_rmse = operator_rmse.detach().cpu() + boundary_rmse.detach().cpu()
+
+                # NEW: обновление глобально лучшей модели по loss
+                if total_rmse < best_rmse_overall: 
+                    print(f"New BEST total_rmse = {best_rmse_overall} after {action['type']} for {action['epochs']} epochs, step {n_steps}")  
+                    best_rmse_overall = float(total_rmse)                  
+                    best_model_overall = copy.deepcopy(self.net)   
 
                 print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
 
@@ -813,13 +816,13 @@ class Model():
             
             optimizer = dict()
             # NEW: в конце comparison-запуска подменяем self.net на лучшую модель
-            if best_loss_overall < float("inf"):                               
+            if best_rmse_overall < float("inf"):                               
                 self.net = best_model_overall                                  
                 self.solution_cls._model_change(self.net)                      
                 callbacks.set_model(self)                                      
-                print('set best model with loss: ', best_loss_overall)       
+                print('set best model with rmse: ', best_rmse_overall)       
             else:                                                              
-                print('No valid loss found during comparison run.')            
+                print('No valid rmse found during comparison run.')            
 
         if isinstance(optimizer, list):
             optimizers_chain = optimizer.copy()
