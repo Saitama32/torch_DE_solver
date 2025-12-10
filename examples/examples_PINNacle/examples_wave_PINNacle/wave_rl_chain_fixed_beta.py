@@ -9,7 +9,7 @@ from comet_ml.integration.pytorch import log_model
 
 experiment = start(
   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_final",
+  project_name="rlpinn_wave_1d_fixed_beta_optimization",
   workspace="saitama32"
 )
 
@@ -35,7 +35,7 @@ from tedeous.utils import exact_solution_data
 experiment.log_parameters({
     "param": "v_1",
     "reward_function": "v_2",
-    "description": "farm_transitions_Burgers_1d_basic_RL_optimizer"
+    "description": "farm_transitions_Wave_1d_basic_RL_optimizer"
 })
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -177,11 +177,6 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
             'lr':[0.0, 1e-3, 1e-4],
             'epochs':[100, 200, 300]
         },
-        # 'NNCG':{
-        #     'lr':[1, 5e-1, 1e-1],
-        #     "precond_update_frequency": [5, 10],
-        #     'epochs':[6, 11, 21]
-        # }
     }
 
 
@@ -276,12 +271,13 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         "exp": experiment,
     }
 
-    backup_params = {
-        "experiment_key" : "7eef2a8539884caaab03e61dac561a68",
-    }
+    # backup_params = {
+    #     "experiment_key" : "7eef2a8539884caaab03e61dac561a68",
+    # }
+    backup_params = None
 
     experiment.log_parameters(rl_agent_params)
-    experiment.log_parameters(backup_params)
+    # experiment.log_parameters(backup_params)
 
     model.train(optimizer,
                 5e5,
