@@ -370,8 +370,8 @@ def heat_2d_gaussian_init_experiment(grid_res, seed=None):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 0.0608023181557655,
-        "prev_tol": 0.060776,
+        "tolerance": 0.0,
+        "prev_tol": 0.0,
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
         "min_grad_norm": 1e-5,
