@@ -273,7 +273,7 @@ class Model():
 
                 loss = float(self.cur_loss.item()) if isinstance(self.cur_loss, torch.Tensor) else float(self.cur_loss)
 
-                if not np.isfinite(loss) or loss > 1e3:
+                if not np.isfinite(loss) or loss > 1e4:
                     print(f'[{datetime.datetime.now()}] Step = {self.t}, loss is not finite or too large: {loss}. Breaking early.')
                     if len(loss_history) < 10:
                         self.rl_penalty = -1
