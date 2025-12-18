@@ -74,66 +74,6 @@ def make_legend(tupe_dqn_class, optimizers):
             the_file.write(f'{i}: {type_}, {epochs_}, {params_}\n')
 
 
-import torch
-
-def boundary_exact_err_sq(
-    net,
-    bconds,
-    rl_agent_params,
-    equation_params,
-    domain_variable_dict,
-    device,
-    exact_solution_data_fn,
-):
-    """
-    Собирает список тензоров квадратов ошибки (u_pred - u_exact)^2 на boundary-точках.
-
-    Возвращает:
-        boundary_err_sq: list[Tensor], где каждый элемент shape [K] (flatten)
-    """
-    boundary_err_sq = []
-
-    def _u_exact(bnd: torch.Tensor) -> torch.Tensor:
-        ex = rl_agent_params["exact_solution"]
-        if callable(exact_solution_data_fn):
-            u_ex = ex(bnd)
-        else:
-            u_ex = exact_solution_data_fn(
-                bnd,
-                ex,
-                equation_params[-1][0],
-                equation_params[-1][-1],
-                t_dim_flag=('t' in list(domain_variable_dict.keys()))
-            )
-        if u_ex.dim() == 1:
-            u_ex = u_ex.view(-1, 1)
-        return u_ex
-
-    with torch.no_grad():
-        for b in bconds:
-            btype = b.get("type", None)
-
-            # periodic: b["bnd"] = [left, right]
-            if btype == "periodic":
-                bnd_left, bnd_right = b["bnd"]
-                for bnd in (bnd_left, bnd_right):
-                    bnd = bnd.to(device)
-                    u_pred = net(bnd)
-                    u_ex = _u_exact(bnd).to(device)
-                    boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
-
-            # non-periodic: b["bnd"] is Tensor
-            else:
-                if not isinstance(b.get("bnd", None), torch.Tensor):
-                    continue
-                bnd = b["bnd"].to(device)
-                u_pred = net(bnd)
-                u_ex = _u_exact(bnd).to(device)
-                boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
-
-    return boundary_err_sq
-
-
 class Model():
     """class for preprocessing"""
 
