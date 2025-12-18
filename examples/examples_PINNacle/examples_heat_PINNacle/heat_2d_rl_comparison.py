@@ -322,7 +322,7 @@ def heat_2d_long_time_experiment(grid_res):
                 boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
 
 
-    error_bnd_rmse_train = torch.sum(torch.stack(boundary_err_sq))
+    error_bnd_rmse_train = torch.sqrt(torch.mean(torch.cat(boundary_err_sq)))
     
 
     error_rmse_train_full = error_op_rmse_train + error_bnd_rmse_train
@@ -367,7 +367,7 @@ def heat_2d_long_time_experiment(grid_res):
                 boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
 
 
-    error_bnd_rmse_test = torch.sum(torch.stack(boundary_err_sq)) 
+    error_bnd_rmse_test = torch.sqrt(torch.mean(torch.cat(boundary_err_sq)))
 
     error_rmse_test_full = error_op_rmse_test + error_bnd_rmse_test
     error_l2re_test = torch.sqrt(torch.sum(
@@ -405,8 +405,8 @@ def heat_2d_long_time_experiment(grid_res):
 if __name__ == "__main__":
     grid_res = 100
     # список сидов для экспериментов
-    seeds = [789, 890, 901, 1012]   # можно расширить список
-    # seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
+    # seeds = [789, 890, 901, 1012]   # можно расширить список
+    seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
     # seeds = [123, 234, 345, 456, 567]
 
     for seed in seeds:

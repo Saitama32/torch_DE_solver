@@ -193,7 +193,7 @@ def diffusion_1d_experiment(grid_res):
                 u_ex = exact_func(bnd).to(device)
                 boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
 
-    error_bnd_rmse_train = torch.sum(torch.stack(boundary_err_sq))
+    error_bnd_rmse_train = torch.sqrt(torch.mean(torch.cat(boundary_err_sq)))
     
 
     error_rmse_train_full = error_op_rmse_train + error_bnd_rmse_train
@@ -236,7 +236,7 @@ def diffusion_1d_experiment(grid_res):
                 u_ex = exact_func(bnd).to(device)
                 boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
 
-    error_bnd_rmse_test = torch.sum(torch.stack(boundary_err_sq)) 
+    error_bnd_rmse_test = torch.sqrt(torch.mean(torch.cat(boundary_err_sq)))
 
     error_rmse_test_full = error_op_rmse_test + error_bnd_rmse_test
     error_l2re_test = torch.sqrt(torch.sum(
