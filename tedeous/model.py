@@ -74,6 +74,66 @@ def make_legend(tupe_dqn_class, optimizers):
             the_file.write(f'{i}: {type_}, {epochs_}, {params_}\n')
 
 
+import torch
+
+def boundary_exact_err_sq(
+    net,
+    bconds,
+    rl_agent_params,
+    equation_params,
+    domain_variable_dict,
+    device,
+    exact_solution_data_fn,
+):
+    """
+    Собирает список тензоров квадратов ошибки (u_pred - u_exact)^2 на boundary-точках.
+
+    Возвращает:
+        boundary_err_sq: list[Tensor], где каждый элемент shape [K] (flatten)
+    """
+    boundary_err_sq = []
+
+    def _u_exact(bnd: torch.Tensor) -> torch.Tensor:
+        ex = rl_agent_params["exact_solution"]
+        if callable(exact_solution_data_fn):
+            u_ex = ex(bnd)
+        else:
+            u_ex = exact_solution_data_fn(
+                bnd,
+                ex,
+                equation_params[-1][0],
+                equation_params[-1][-1],
+                t_dim_flag=('t' in list(domain_variable_dict.keys()))
+            )
+        if u_ex.dim() == 1:
+            u_ex = u_ex.view(-1, 1)
+        return u_ex
+
+    with torch.no_grad():
+        for b in bconds:
+            btype = b.get("type", None)
+
+            # periodic: b["bnd"] = [left, right]
+            if btype == "periodic":
+                bnd_left, bnd_right = b["bnd"]
+                for bnd in (bnd_left, bnd_right):
+                    bnd = bnd.to(device)
+                    u_pred = net(bnd)
+                    u_ex = _u_exact(bnd).to(device)
+                    boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+            # non-periodic: b["bnd"] is Tensor
+            else:
+                if not isinstance(b.get("bnd", None), torch.Tensor):
+                    continue
+                bnd = b["bnd"].to(device)
+                u_pred = net(bnd)
+                u_ex = _u_exact(bnd).to(device)
+                boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+    return boundary_err_sq
+
+
 class Model():
     """class for preprocessing"""
 
@@ -247,6 +307,64 @@ class Model():
 
         print('[{}] initial (min) loss is {}'.format(datetime.datetime.now(), self.min_loss.item()))
 
+        def boundary_exact_err_sq(
+            net,
+            bconds,
+            rl_agent_params,
+            equation_params,
+            domain_variable_dict,
+            device,
+            exact_solution_data_fn,
+        ):
+            """
+            Собирает список тензоров квадратов ошибки (u_pred - u_exact)^2 на boundary-точках.
+
+            Возвращает:
+                boundary_err_sq: list[Tensor], где каждый элемент shape [K] (flatten)
+            """
+            boundary_err_sq = []
+
+            def _u_exact(bnd: torch.Tensor) -> torch.Tensor:
+                ex = rl_agent_params["exact_solution"]
+                if callable(ex):
+                    u_ex = ex(bnd)
+                else:
+                    u_ex = exact_solution_data_fn(
+                        bnd,
+                        ex,
+                        equation_params[-1][0],
+                        equation_params[-1][-1],
+                        t_dim_flag=('t' in list(domain_variable_dict.keys()))
+                    )
+                if u_ex.dim() == 1:
+                    u_ex = u_ex.view(-1, 1)
+                return u_ex
+
+            with torch.no_grad():
+                for b in bconds:
+                    btype = b.get("type", None)
+
+                    # periodic: b["bnd"] = [left, right]
+                    if btype == "periodic":
+                        bnd_left, bnd_right = b["bnd"]
+                        for bnd in (bnd_left, bnd_right):
+                            bnd = bnd.to(device)
+                            u_pred = net(bnd)
+                            u_ex = _u_exact(bnd).to(device)
+                            boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+                    # non-periodic: b["bnd"] is Tensor
+                    else:
+                        if not isinstance(b.get("bnd", None), torch.Tensor):
+                            continue
+                        bnd = b["bnd"].to(device)
+                        u_pred = net(bnd)
+                        u_ex = _u_exact(bnd).to(device)
+                        boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+            return boundary_err_sq
+
+
         def execute_training_phase(epochs, n_save_models=1, stuck_threshold=50):
             if not (models_concat_flag and rl_agent_params):
                 self.saved_models = []
@@ -273,7 +391,7 @@ class Model():
 
                 loss = float(self.cur_loss.item()) if isinstance(self.cur_loss, torch.Tensor) else float(self.cur_loss)
 
-                if not np.isfinite(loss) or loss > 1e4:
+                if not np.isfinite(loss) or loss > 1e5:
                     print(f'[{datetime.datetime.now()}] Step = {self.t}, loss is not finite or too large: {loss}. Breaking early.')
                     if len(loss_history) < 10:
                         self.rl_penalty = -1
@@ -561,19 +679,17 @@ class Model():
                         net_predicted = net(grid)
                         operator_rmse = torch.sqrt(torch.mean((exact.reshape(-1, 1) - net_predicted) ** 2))
 
-                    boundary_rmse_lst = []
-                    for b in bconds:
-                        if isinstance(b["bnd"], torch.Tensor):
-                            bnd_lst = [b["bnd"]]
-                        for bnd in bnd_lst:
-                            net_bnd = net(bnd)
-                            try:
-                                result = (b["bval"].reshape_as(net_bnd) - net_bnd) ** 2
-                            except:
-                                result = (torch.full(net_bnd.shape, b["bval"].item()) - net_bnd) ** 2
-                            boundary_rmse_lst.append(torch.sqrt(torch.mean(result)))
+                    boundary_err_sq = boundary_exact_err_sq(
+                        net=net,
+                        bconds=bconds,
+                        rl_agent_params=rl_agent_params,
+                        equation_params=equation_params,
+                        domain_variable_dict=self.domain.variable_dict,
+                        device=device_type(),
+                        exact_solution_data_fn=exact_solution_data,
+                    )
 
-                    boundary_rmse = torch.sum(torch.stack(boundary_rmse_lst))
+                    boundary_rmse = torch.sqrt(torch.mean(torch.cat(boundary_err_sq)))
 
                     print(f"Operator RMSE: {operator_rmse}, Boundary RMSE: {boundary_rmse}")
 
