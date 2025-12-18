@@ -254,7 +254,7 @@ def diffusion_1d_experiment(grid_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 7000,
-        "experiment_key": "7c7cd9595c6c4d54abe2a173fc68e347",
+        "experiment_key": "47c5550167ab4d96b1ac80b0335f27a6",
         "grid_res": grid_res
     }
 
@@ -285,20 +285,30 @@ def diffusion_1d_experiment(grid_res):
     variable_dict = domain.variable_dict
     bconds = boundaries.build(variable_dict)
 
-    boundary_rmse_lst = []
-    for b in bconds:
-        if isinstance(b["bnd"], torch.Tensor):
-            bnd_lst = [b["bnd"]]
-        for bnd in bnd_lst:
-            net_bnd = net(bnd)
-            try:
-                result = (b["bval"].reshape_as(net_bnd) - net_bnd) ** 2
-            except:
-                result = (torch.full(net_bnd.shape, b["bval"].item()) - net_bnd) ** 2
-            boundary_rmse_lst.append(torch.sqrt(torch.mean(result)))
+    boundary_err_sq = []
+    with torch.no_grad():
+        for b in bconds:
+            btype = b.get("type", None)
 
-    error_bnd_rmse_train = torch.sum(torch.stack(boundary_rmse_lst))
-    
+            # periodic: b["bnd"] = [left, right]
+            if btype == "periodic":
+                bnd_left, bnd_right = b["bnd"]
+                for bnd in (bnd_left, bnd_right):
+                    bnd = bnd.to(device)
+                    u_pred = net(bnd)
+                    u_ex = exact_func(bnd).to(device)
+                    boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+            # non-periodic: b["bnd"] is Tensor
+            else:
+                if not isinstance(b.get("bnd", None), torch.Tensor):
+                    continue
+                bnd = b["bnd"].to(device)
+                u_pred = net(bnd)
+                u_ex = exact_func(bnd).to(device)
+                boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+    error_bnd_rmse_train = torch.sum(torch.stack(boundary_err_sq))
 
     error_rmse_train_full = error_op_rmse_train + error_bnd_rmse_train
 
@@ -317,19 +327,30 @@ def diffusion_1d_experiment(grid_res):
     bconds = boundaries.build(variable_dict)
     u_exact_test = exact_func(grid_test).to(device).reshape(-1, 1)
     error_op_rmse_test = torch.sqrt(torch.mean((u_exact_test - net(grid_test)) ** 2))
-    boundary_rmse_lst = []
-    for b in bconds:
-        if isinstance(b["bnd"], torch.Tensor):
-            bnd_lst = [b["bnd"]]
-        for bnd in bnd_lst:
-            net_bnd = net(bnd)
-            try:
-                result = (b["bval"].reshape_as(net_bnd) - net_bnd) ** 2
-            except:
-                result = (torch.full(net_bnd.shape, b["bval"].item()) - net_bnd) ** 2
-            boundary_rmse_lst.append(torch.sqrt(torch.mean(result)))
+    boundary_err_sq = []
+    with torch.no_grad():
+        for b in bconds:
+            btype = b.get("type", None)
 
-    error_bnd_rmse_test = torch.sum(torch.stack(boundary_rmse_lst)) 
+            # periodic: b["bnd"] = [left, right]
+            if btype == "periodic":
+                bnd_left, bnd_right = b["bnd"]
+                for bnd in (bnd_left, bnd_right):
+                    bnd = bnd.to(device)
+                    u_pred = net(bnd)
+                    u_ex = exact_func(bnd).to(device)
+                    boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+            # non-periodic: b["bnd"] is Tensor
+            else:
+                if not isinstance(b.get("bnd", None), torch.Tensor):
+                    continue
+                bnd = b["bnd"].to(device)
+                u_pred = net(bnd)
+                u_ex = exact_func(bnd).to(device)
+                boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+    error_bnd_rmse_test = torch.sum(torch.stack(boundary_err_sq)) 
 
     error_rmse_test_full = error_op_rmse_test + error_bnd_rmse_test
     error_l2re_test = torch.sqrt(torch.sum(
