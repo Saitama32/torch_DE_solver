@@ -22,10 +22,9 @@ from tedeous.RL_utils.logger import log_priority_to_comet
 import tempfile
 
 
-GAMMA = 0.95
-EPS_START = 0.95
+EPS_START = 0.5
 EPS_END = 0.05
-EPS_DECAY = 1000
+EPS_DECAY = 300
 TAU = 0.01
 
 
