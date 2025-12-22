@@ -17,7 +17,9 @@ import tempfile
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(project_root)
 from tedeous.data import Domain, Conditions, Equation
 from tedeous.model import Model
 from tedeous.callbacks import cache, early_stopping, plot
@@ -482,7 +484,7 @@ def heat_2d_gaussian_init_experiment(grid_res, seed=None):
     error_rmse_test_full = error_op_rmse_test + error_bnd_rmse_test
     error_l2re_test = torch.sqrt(torch.sum(
         (u_exact_test - net(grid_test)) ** 2) / torch.sum(u_exact_test ** 2))
-    print(f"Train full RMSE: {error_rmse_test_full}, Train op RMSE: {error_op_rmse_test}, Train bnd RMSE: {error_bnd_rmse_test}, L2RE op: {error_l2re_test}")
+    print(f"Test full RMSE: {error_rmse_test_full}, Test op RMSE: {error_op_rmse_test}, Test bnd RMSE: {error_bnd_rmse_test}, L2RE op: {error_l2re_test}")
 
     
     experiment.log_metrics({
