@@ -72,7 +72,7 @@ def enforce_hermitian(kx, ky, h):
     return h, k_to_idx
 
 
-def make_gaussian_init(N=10, seed=None, device="cpu"):
+def make_gaussian_init(N=10, device="cpu"):
     """
     Реализация начальных условий heat_random из статьи (формула (33)):
       - N = 10 (kx,ky in {-5,...,4})
@@ -81,10 +81,6 @@ def make_gaussian_init(N=10, seed=None, device="cpu"):
       - ĝ(k)=0 при |k|>=13/2
       - h(-k)=conj(h(k)) => g(x) вещественная
     """
-    if seed is not None:
-        torch.manual_seed(seed)
-        if device == "cuda":
-            torch.cuda.manual_seed_all(seed)
 
     # N=10 => [-5, -4, ..., 4]
     kx_range = torch.arange(-N // 2, N // 2, device=device, dtype=torch.float32)
@@ -166,7 +162,7 @@ def make_gaussian_init(N=10, seed=None, device="cpu"):
     return init_func, exact_func
 
 
-def heat_2d_gaussian_init_experiment(grid_res, seed=None):
+def heat_2d_gaussian_init_experiment(grid_res):
     exp_dict_list = []
 
     x_min, x_max = 0, 2 * torch.pi
@@ -190,7 +186,7 @@ def heat_2d_gaussian_init_experiment(grid_res, seed=None):
 
     boundaries = Conditions()
 
-    init_func, exact_func = make_gaussian_init(N=10, seed=seed, device='cuda')
+    init_func, exact_func = make_gaussian_init(N=10, device='cuda')
 
     # Initial condition ################################################################################################
 
