@@ -401,7 +401,7 @@ def heat_2d_gaussian_init_experiment(grid_res, seed=None):
                 AE_model_params=AE_model_params,
                 AE_train_params=AE_train_params,
                 loss_surface_params=loss_surface_params,
-                backup_params=comparison_params)
+                comparison_param=comparison_params)
         
 
     net = model.net.to(device)
