@@ -154,8 +154,6 @@ def heat_2d_linear_problem_experiment(grid_res):
     grid = domain.build('NN').to('cuda')
     net = net.to('cuda')
     u_exact = exact_func(grid).reshape(-1, 1)
-    print("u_exact:", u_exact)
-    print("u_pred:", net(grid))
 
     error_rmse = torch.sqrt(torch.mean((exact_func(grid).reshape(-1, 1) - net(grid)) ** 2))
     print('RMSE heat_2d_linear_problem = {}'.format(error_rmse))
@@ -183,7 +181,7 @@ nruns = 10
 
 exp_dict_list = []
 
-for grid_res in range(100, 1001, 100):
+for grid_res in range(10, 1001, 100):
     for _ in range(nruns):
         exp_dict_list.append(heat_2d_linear_problem_experiment(grid_res))
 

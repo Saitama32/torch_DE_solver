@@ -376,9 +376,11 @@ def heat_2d_long_time_experiment(grid_res):
     error_bnd_rmse_test = torch.sqrt(torch.mean(torch.cat(boundary_err_sq)))
 
     error_rmse_test_full = error_op_rmse_test + error_bnd_rmse_test
+    
     error_l2re_test = torch.sqrt(torch.sum(
         (u_exact_test - net(grid_test)) ** 2) / torch.sum(u_exact_test ** 2))
-    print(f"Train full RMSE: {error_rmse_test_full}, Train op RMSE: {error_op_rmse_test}, Train bnd RMSE: {error_bnd_rmse_test}, L2RE op: {error_l2re_test}")
+    
+    print(f"Test full RMSE: {error_rmse_test_full}, Test op RMSE: {error_op_rmse_test}, Test bnd RMSE: {error_bnd_rmse_test}, L2RE op: {error_l2re_test}")
 
     
     experiment.log_metrics({
@@ -391,6 +393,18 @@ def heat_2d_long_time_experiment(grid_res):
     "error_rmse_test_full": error_rmse_test_full.item(),
     "error_l2re_test": error_l2re_test.item()
     }, step=seed)
+
+    # u_exact = u_exact_test.detach().cpu()
+    # u_pred  = net(grid_test).detach().cpu()
+
+
+    # with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp:
+    #     tmp_path = tmp.name  # запомнили путь
+    #     torch.save({"u_exact_test": u_exact, "u_pred_test": u_pred,
+    #                 "u_exac"}, tmp_path)
+
+    # логируем в Comet
+    # experiment.log_asset(tmp_path, file_name=f"u_test_seed_{seed}.pt", step=seed)
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp_params:
         torch.save(model.net.state_dict(), tmp_params.name)
@@ -412,8 +426,8 @@ if __name__ == "__main__":
     grid_res = 100
     # список сидов для экспериментов
     # seeds = [789, 890, 901, 1012]   # можно расширить список
-    seeds = [678]
-    # seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
+    # seeds = [678]
+    seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
     # seeds = [123, 234, 345, 456, 567]
 
     for seed in seeds:
