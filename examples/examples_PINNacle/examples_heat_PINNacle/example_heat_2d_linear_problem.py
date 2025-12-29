@@ -20,8 +20,10 @@ k = torch.arange(N)
 
 
 def exact_func(grid):
-    x, y, t = grid[:, 0], grid[:, 1], grid[:, 2]
-    sln = torch.sum((torch.sin(k * x[:, None]) + torch.sin(k * y[:, None])) * torch.exp(-k ** 2 * t[:, None]))
+    x, y, t = grid[:, 0], grid[:, 1], grid[:, 2]              # (M,)
+    # (M, N) по модам
+    modes = (torch.sin(k * x[:, None]) + torch.sin(k * y[:, None])) * torch.exp(-(k**2) * t[:, None])
+    sln = torch.sum(modes, dim=1, keepdim=True)               # (M,1) !!! важно
     return sln
 
 
@@ -46,8 +48,13 @@ def heat_2d_linear_problem_experiment(grid_res):
     # Initial condition: ###############################################################################################
 
     # u(x, y, 0)
-    boundaries.dirichlet({'x': [x_min, x_max], 'y': [y_min, y_max], 't': 0}, value=lambda grid: torch.sum(
-        torch.sin(k * grid[:, 0][:, None]) + torch.sin(k * grid[:, 1][:, None])))
+    boundaries.dirichlet(
+        {'x': [x_min, x_max], 'y': [y_min, y_max], 't': 0},
+        value=lambda grid: torch.sum(
+            torch.sin(k * grid[:, 0][:, None]) + torch.sin(k * grid[:, 1][:, None]),
+            dim=1, keepdim=True
+        )
+    )
 
     # Boundary conditions (periodic): ##################################################################################
 
@@ -125,29 +132,38 @@ def heat_2d_linear_problem_experiment(grid_res):
                                          randomize_parameter=1e-6,
                                          info_string_every=10)
 
-    cb_plots = plot.Plots(save_every=500,
-                          print_every=None,
-                          img_dir=img_dir,
-                          img_dim='2d',
-                          scatter_flag=False,
-                          plot_axes=[0, 1],
-                          fixed_axes=[2],
-                          n_samples=4,
-                          img_rows=2,
-                          img_cols=2)
+    # cb_plots = plot.Plots(save_every=500,
+    #                       print_every=None,
+    #                       img_dir=img_dir,
+    #                       img_dim='2d',
+    #                       scatter_flag=False,
+    #                       plot_axes=[0, 1],
+    #                       fixed_axes=[2],
+    #                       n_samples=4,
+    #                       img_rows=2,
+    #                       img_cols=2)
 
-    optimizer = Optimizer('Adam', {'lr': 1e-3})
+    optimizer = Optimizer('LBFGS', {'lr': 0.5})
 
-    callbacks = [cb_cache, cb_es, cb_plots]
+    callbacks = [cb_cache, cb_es]
 
-    model.train(optimizer, 5e5, save_model=True, callbacks=callbacks)
+    model.train(optimizer, 100, save_model=True, callbacks=callbacks)
 
     end = time.time()
 
     grid = domain.build('NN').to('cuda')
     net = net.to('cuda')
+    u_exact = exact_func(grid).reshape(-1, 1)
+    print("u_exact:", u_exact)
+    print("u_pred:", net(grid))
 
     error_rmse = torch.sqrt(torch.mean((exact_func(grid).reshape(-1, 1) - net(grid)) ** 2))
+    print('RMSE heat_2d_linear_problem = {}'.format(error_rmse))
+
+    error_l2re_train = torch.sqrt(torch.sum(
+    (u_exact - net(grid)) ** 2) / torch.sum(u_exact ** 2))
+
+    print('L2RE heat_2d_linear_problem = {}'.format(error_l2re_train))
 
     exp_dict_list.append({
         'grid_res': grid_res,

@@ -55,13 +55,13 @@ def diffusion_1d_experiment(grid_res):
 
     domain = Domain()
     domain.variable('x', [x_min, x_max], grid_res)
-    domain.variable('t', [0, t_max], 10)
+    domain.variable('t', [0, t_max], grid_res)
 
     boundaries = Conditions()
 
     # Initial condition: ###############################################################################################
 
-    # u(x, y, 0)
+    # u(x, 0)
     boundaries.dirichlet({'x': [x_min, x_max], 't': 0},
                          value=lambda grid: torch.sum(torch.sin(k * grid[:, 0][:, None])))
 

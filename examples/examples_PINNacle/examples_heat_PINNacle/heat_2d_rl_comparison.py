@@ -42,10 +42,11 @@ k = torch.arange(N)
 
 
 def exact_func(grid):
-    x, y, t = grid[:, 0], grid[:, 1], grid[:, 2]
-    sln = torch.sum((torch.sin(k * x[:, None]) + torch.sin(k * y[:, None])) * torch.exp(-k ** 2 * t[:, None]))
+    x, y, t = grid[:, 0], grid[:, 1], grid[:, 2]              # (M,)
+    # (M, N) по модам
+    modes = (torch.sin(k * x[:, None]) + torch.sin(k * y[:, None])) * torch.exp(-(k**2) * t[:, None])
+    sln = torch.sum(modes, dim=1, keepdim=True)               # (M,1) !!! важно
     return sln
-
 
 def heat_2d_long_time_experiment(grid_res):
     exp_dict_list = []
@@ -75,9 +76,13 @@ def heat_2d_long_time_experiment(grid_res):
     # Initial condition: ###############################################################################################
 
     # u(x, y, 0)
-    boundaries.dirichlet({'x': [x_min, x_max], 'y': [y_min, y_max], 't': 0}, value=lambda grid: torch.sum(
-        torch.sin(k * grid[:, 0][:, None]) + torch.sin(k * grid[:, 1][:, None])))
-
+    boundaries.dirichlet(
+        {'x': [x_min, x_max], 'y': [y_min, y_max], 't': 0},
+        value=lambda grid: torch.sum(
+            torch.sin(k * grid[:, 0][:, None]) + torch.sin(k * grid[:, 1][:, None]),
+            dim=1, keepdim=True
+        )
+    )
     # Boundary conditions (periodic): ##################################################################################
 
     # u(0, y, t) = u(2*pi, y, t)
@@ -142,6 +147,7 @@ def heat_2d_long_time_experiment(grid_res):
 
     grid = domain.build('NN').to(device)
     grid_test = domain_test.build('NN').to(device)
+    
 
     model = Model(net, domain, equation, boundaries)
 
