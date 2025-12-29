@@ -66,7 +66,7 @@ def diffusion_1d_experiment(grid_res):
 
     # u(x, 0)
     boundaries.dirichlet({'x': [x_min, x_max], 't': 0},
-                         value=lambda grid: torch.sum(torch.sin(k * grid[:, 0][:, None])), dim=1, keepdim=True)
+                         value=lambda grid: torch.sum(torch.sin(k * grid[:, 0][:, None]), dim=1, keepdim=True))
 
     # Boundary conditions (periodic): ##################################################################################
 

@@ -289,12 +289,34 @@ def burgers_1d_periodic_experiment(grid_res):
     error_op_rmse_train = torch.sqrt(torch.mean(diff ** 2))
     variable_dict = domain.variable_dict
     bconds = boundaries.build(variable_dict)
-    error_bnd_rmse_train = torch.sum(torch.stack([
-                        torch.sqrt(torch.mean(
-                            (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
-                        ))
-                        for b in bconds
-                    ]))
+
+    boundary_err_sq = []
+    with torch.no_grad():
+        for b in bconds:
+            btype = b.get("type", None)
+
+            # periodic: b["bnd"] = [left, right]
+            if btype == "periodic":
+                bnd_left, bnd_right = b["bnd"]
+                for bnd in (bnd_left, bnd_right):
+                    bnd = bnd.to(device)
+                    u_pred = net(bnd)
+                    u_ex = exact_func(bnd).to(device)
+                    boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+            # non-periodic: b["bnd"] is Tensor
+            else:
+                if not isinstance(b.get("bnd", None), torch.Tensor):
+                    continue
+                bnd = b["bnd"].to(device)
+                u_pred = net(bnd)
+                u_ex = exact_func(bnd).to(device)
+                boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+
+    error_bnd_rmse_train = torch.sqrt(torch.mean(torch.cat(boundary_err_sq)))
+    
+
     error_rmse_train_full = error_op_rmse_train + error_bnd_rmse_train
 
     error_l2re_train = torch.sqrt(torch.sum(
@@ -308,14 +330,33 @@ def burgers_1d_periodic_experiment(grid_res):
     domain_test.variable('t', [0, t_max], 11)
     variable_dict = domain_test.variable_dict
     bconds = boundaries.build(variable_dict)
-    u_exact_test = exact_func(grid_test).reshape(-1)
+    u_exact_test = exact_func(grid_test).to(device).reshape(-1, 1)
     error_op_rmse_test = torch.sqrt(torch.mean((u_exact_test - net(grid_test)) ** 2))
-    error_bnd_rmse_test = torch.sum(torch.stack([
-                    torch.sqrt(torch.mean(
-                        (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
-                    ))
-                    for b in bconds
-                ]))
+    boundary_err_sq = []
+    with torch.no_grad():
+        for b in bconds:
+            btype = b.get("type", None)
+
+            # periodic: b["bnd"] = [left, right]
+            if btype == "periodic":
+                bnd_left, bnd_right = b["bnd"]
+                for bnd in (bnd_left, bnd_right):
+                    bnd = bnd.to(device)
+                    u_pred = net(bnd)
+                    u_ex = exact_func(bnd).to(device)
+                    boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+            # non-periodic: b["bnd"] is Tensor
+            else:
+                if not isinstance(b.get("bnd", None), torch.Tensor):
+                    continue
+                bnd = b["bnd"].to(device)
+                u_pred = net(bnd)
+                u_ex = exact_func(bnd).to(device)
+                boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+
+    error_bnd_rmse_test = torch.sqrt(torch.mean(torch.cat(boundary_err_sq)))
     error_rmse_test_full = error_op_rmse_test + error_bnd_rmse_test
     error_l2re_test = torch.sqrt(torch.sum(
         (u_exact_test - net(grid_test)) ** 2) / torch.sum(u_exact_test ** 2))
