@@ -140,8 +140,8 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
         net = torch.nn.DataParallel(net)
 
     net = net.cuda()
-
-    grid_test = torch.cartesian_prod(torch.linspace(0, 1, 80), torch.linspace(0, 1, 80))
+    grid_test_res = 80
+    grid_test = torch.cartesian_prod(torch.linspace(0, 1, grid_test_res), torch.linspace(0, 1, grid_test_res))
     model = Model(net, domain, equation, boundaries)
     model_layers = [pde_dim_in, neurons, neurons, neurons, pde_dim_out]
 
@@ -200,8 +200,8 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
 
     # Test errors
     domain_test = Domain()
-    domain_test.variable('x', [x_min, x_max], 100)
-    domain_test.variable('t', [0, t_max], 100)
+    domain_test.variable('x', [x_min, x_max], grid_test_res)
+    domain_test.variable('t', [0, t_max], grid_test_res)
     variable_dict = domain_test.variable_dict
     bconds = boundaries.build(variable_dict)
 
