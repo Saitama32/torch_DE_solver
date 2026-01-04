@@ -107,6 +107,9 @@ def burgers_1d_experiment(grid_res):
     # net = mat_model(domain, equation)
 
     grid = domain.build('NN').to('cuda')
+    domain = Domain()
+    domain.variable('x', [x_min, x_max], grid_res)
+    domain.variable('t', [0, t_max], grid_res)
     grid_test = torch.cartesian_prod(torch.linspace(0, 1, 100), torch.linspace(0, 1, 100))
     u_exact_test = exact_solution_data(grid, data_file, pde_dim_in, pde_dim_out).reshape(-1)
 
