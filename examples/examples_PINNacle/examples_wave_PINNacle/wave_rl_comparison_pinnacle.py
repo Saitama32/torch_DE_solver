@@ -47,13 +47,13 @@ base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 print(base_dir)
 
 
-def exact_func(grid, beta=5):
+def exact_func(grid, beta=4):
     x, t = grid[:, 0], grid[:, 1]
     sln = torch.sin(np.pi * x) * torch.cos(2 * np.pi * t) + 0.5 * \
           torch.sin(beta * np.pi * x) * torch.cos(2 * beta * np.pi * t)
     return sln
 
-def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
+def wave_1d_basic_experiment(seed, x_res, t_res, beta=4):
     exp_dict_list = []
 
     x_min, x_max = 0, 1
@@ -282,7 +282,7 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 7000,
-        "experiment_key": "d207614d40c8430c8d9c471ad1610558"
+        "experiment_key": "6d6292bae815427a905114fa6d43dce8"
     }
 
     experiment.log_parameters(rl_agent_params)
@@ -305,15 +305,36 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
 
     grid = torch.cartesian_prod(torch.linspace(0, 1, x_res), torch.linspace(0, 1, t_res)).to(device)
     grid_test = grid_test.to(device)
-    error_op_rmse_train = torch.sqrt(torch.mean((exact_func(grid).reshape(-1, 1) - model.net(grid)) ** 2))
+    error_op_mse_train = torch.mean((exact_func(grid).reshape(-1, 1) - net(grid)) ** 2)
+    error_op_rmse_train = torch.sqrt(error_op_mse_train)    
     variable_dict = domain.variable_dict
     bconds = boundaries.build(variable_dict)
-    error_bnd_rmse_train = torch.sum(torch.stack([
-                        torch.sqrt(torch.mean(
-                            (b["bval"].reshape_as(model.net(b["bnd"])) - model.net(b["bnd"])) ** 2, dtype=torch.float32
-                        ))
-                        for b in bconds
-                    ]))
+    boundary_err_sq = []
+    with torch.no_grad():
+        for b in bconds:
+            btype = b.get("type", None)
+
+            # оставляем только сравнение u на границе
+            if btype != "dirichlet" and btype != "periodic":
+                continue
+
+            if btype == "periodic":
+                bnd_left, bnd_right = b["bnd"]
+                for bnd in (bnd_left, bnd_right):
+                    bnd = bnd.to(device)
+                    u_pred = net(bnd)
+                    u_ex = exact_func(bnd).to(device).reshape_as(u_pred)
+                    boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+            else:
+                bnd = b["bnd"].to(device)
+                u_pred = net(bnd)
+                u_ex = exact_func(bnd).to(device).reshape_as(u_pred)
+                boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+    error_bnd_mse_train = torch.mean(torch.cat(boundary_err_sq))
+
+
+    error_bnd_rmse_train = torch.sqrt(torch.mean(torch.cat(boundary_err_sq)))
     error_rmse_train_full = error_op_rmse_train + error_bnd_rmse_train
 
     error_l2re_train = torch.sqrt(torch.sum(
@@ -328,32 +349,63 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=5):
     variable_dict = domain_test.variable_dict
     bconds = boundaries.build(variable_dict)
 
-    error_op_rmse_test = torch.sqrt(torch.mean((exact_func(grid_test).reshape(-1, 1) - net(grid_test)) ** 2))
-    error_bnd_rmse_test = torch.sum(torch.stack([
-                    torch.sqrt(torch.mean(
-                        (b["bval"].reshape_as(net(b["bnd"])) - net(b["bnd"])) ** 2, dtype=torch.float32
-                    ))
-                    for b in bconds
-                ]))
+    error_op_mse_test = torch.mean((exact_func(grid_test).reshape(-1, 1) - net(grid_test)) ** 2)
+    error_op_rmse_test = torch.sqrt(error_op_mse_test)  
+    boundary_err_sq = []
+    with torch.no_grad():
+        for b in bconds:
+            btype = b.get("type", None)
+
+            # оставляем только сравнение u на границе
+            if btype != "dirichlet" and btype != "periodic":
+                continue
+
+            if btype == "periodic":
+                bnd_left, bnd_right = b["bnd"]
+                for bnd in (bnd_left, bnd_right):
+                    bnd = bnd.to(device)
+                    u_pred = net(bnd)
+                    u_ex = exact_func(bnd).to(device).reshape_as(u_pred)
+                    boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+            else:
+                bnd = b["bnd"].to(device)
+                u_pred = net(bnd)
+                u_ex = exact_func(bnd).to(device).reshape_as(u_pred)
+                boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+    error_bnd_mse_test = torch.mean(torch.cat(boundary_err_sq))
+
+    error_bnd_rmse_test = torch.sqrt(torch.mean(torch.cat(boundary_err_sq)))
     error_rmse_test_full = error_op_rmse_test + error_bnd_rmse_test
     error_l2re_test = torch.sqrt(torch.sum(
         (exact_func(grid_test).reshape(-1, 1) - net(grid_test)) ** 2) / torch.sum(exact_func(grid_test).reshape(-1, 1) ** 2))
-    print(f"Train full RMSE: {error_rmse_test_full}, Train op RMSE: {error_op_rmse_test}, Train bnd RMSE: {error_bnd_rmse_test}, L2RE op: {error_l2re_test}")
+    print(f"Test full RMSE: {error_rmse_test_full}, Test op RMSE: {error_op_rmse_test}, Test bnd RMSE: {error_bnd_rmse_test}, L2RE op: {error_l2re_test}")
 
     
     experiment.log_metrics({
-    "error_op_rmse_train": error_op_rmse_train.item(),
-    "error_bnd_rmse_train": error_bnd_rmse_train.item(),
-    "error_rmse_train_full": error_rmse_train_full.item(),
-    "error_l2re_train": error_l2re_train.item(),
-    "error_op_rmse_test": error_op_rmse_test.item(),
-    "error_bnd_rmse_test": error_bnd_rmse_test.item(),
-    "error_rmse_test_full": error_rmse_test_full.item(),
-    "error_l2re_test": error_l2re_test.item()
+        # RMSE
+        "error_op_rmse_train": error_op_rmse_train.item(),
+        "error_bnd_rmse_train": error_bnd_rmse_train.item(),
+        "error_rmse_train_full": error_rmse_train_full.item(),
+
+        "error_op_rmse_test": error_op_rmse_test.item(),
+        "error_bnd_rmse_test": error_bnd_rmse_test.item(),
+        "error_rmse_test_full": error_rmse_test_full.item(),
+
+        # MSE (новое)
+        "error_op_mse_train": error_op_mse_train.item(),
+        "error_bnd_mse_train": error_bnd_mse_train.item(),
+
+        "error_op_mse_test": error_op_mse_test.item(),
+        "error_bnd_mse_test": error_bnd_mse_test.item(),
+
+        # остальное
+        "error_l2re_train": error_l2re_train.item(),
+        "error_l2re_test": error_l2re_test.item(),
     }, step=seed)
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp_params:
-        torch.save(model.net.state_dict(), tmp_params.name)
+        torch.save(net.state_dict(), tmp_params.name)
         params_path = tmp_params.name
 
     # --- логируем как модельные файлы ---
