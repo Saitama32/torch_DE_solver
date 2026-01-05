@@ -133,7 +133,7 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=4):
         torch.nn.Tanh(),
         torch.nn.Linear(neurons, pde_dim_out)
     )
-    
+
     for m in net.modules():
         if isinstance(m, torch.nn.Linear):
             torch.nn.init.xavier_normal_(m.weight)
@@ -430,7 +430,8 @@ if __name__ == "__main__":
     beta = 4
 
     # список сидов для экспериментов
-    seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
+    # seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
+    seeds = [901, 1012]   # можно расширить список
 
     for seed in seeds:
         print(f"\n🔹 Запуск эксперимента с seed = {seed}")
