@@ -12,7 +12,8 @@ import os
 import sys
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(project_root)
 
 from tedeous.data import Domain, Conditions, Equation
 from tedeous.model import Model
@@ -30,7 +31,7 @@ experiment.log_parameters({
 device = "cuda" if torch.cuda.is_available() else "cpu"
 solver_device(device)
 
-data_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../PINNacle_data/poisson1_cg_data.npy"))
+data_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../PINNacle_data/poisson1_cg_data.npy"))
 def poisson_2d_classic_experiment(grid_res):
     exp_dict_list = []
 
