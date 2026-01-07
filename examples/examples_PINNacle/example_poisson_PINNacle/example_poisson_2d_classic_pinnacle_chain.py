@@ -3,7 +3,7 @@ from comet_ml.integration.pytorch import log_model
 
 experiment = start(
   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_poisson_2d_classic_tolerance",
+  project_name="rlpinn_poisson_2d_classic_farm_transitions",
   workspace="saitama32"
 )
 
@@ -232,7 +232,7 @@ def poisson_2d_classic_experiment(grid_res):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 0.0,
+        "tolerance": 0.178366587423173,
         "prev_tol": 0.0,
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
