@@ -232,7 +232,7 @@ def poisson_2d_classic_experiment(grid_res):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 0.178792853,
+        "tolerance": 0.178366587423173,
         "prev_tol": 0.0,
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
