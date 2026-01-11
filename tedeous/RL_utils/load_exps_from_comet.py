@@ -8,7 +8,7 @@ from tedeous.RL_utils.load_transitions_into_buffer_pickle import load_transition
 
 # === Настройки ===
 WORKSPACE = "saitama32"
-PROJECT_NAME = "rlpinn-diffusion-1d-farm-transitions"
+PROJECT_NAME = "rlpinn-poisson-2d-classic-farm-transitions"
 # MAX_EXPERIMENTS = 15  # можно изменить при необходимости
 
 api = API(api_key="aP71fQTYPNqfsYWvudPPmoBl5")  # или просто API()
@@ -144,7 +144,7 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
                 print(f"   ❌ Ошибка при чтении {filename}: {e}")
     # tolerance =0.0608023 
     # prev_tol= 0.060776
-    if tolerance > prev_tol:
+    if tolerance > prev_tol and prev_tol != 0.0:
         all_transitions = truncate_success_chains(all_transitions, current_tol=tolerance, prev_tol= prev_tol)
 
     # --- Сдвиг наград для успешных переходов ---
