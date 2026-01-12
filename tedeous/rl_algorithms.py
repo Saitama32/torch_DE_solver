@@ -361,6 +361,9 @@ class DQNAgent:
             self.td_running_std = self.tr_mom * self.td_running_std + (1.0 - self.tr_mom) * sigma_batch
             sigma = max(sigma_batch, self.td_running_std, self.tr_eps)
             sigma_t = torch.full_like(q_sa, fill_value=sigma)         # [B], на девайсе
+            # delta_norm
+            delta_norm = (y_opt - q_sa) / sigma_t
+
 
             # --- разность между online и target на ТЕКУЩЕМ (s_t, a_t) ---
             with torch.no_grad():
@@ -375,12 +378,15 @@ class DQNAgent:
             tr_keep = (~tr_mask_drop).float()                         # [B] 1.0 = учим, 0.0 = выкинуть
 
             # --- применяем маску к лоссу оптимизаторной головы ---
-            per_sample_loss_opt = self.huberloss(input=q_sa, target=y_opt) * is_w
+            # лосс по нормализованной ошибке
+            per_sample_loss_opt = self.huberloss(input=delta_norm,
+                                                target=torch.zeros_like(delta_norm)) * is_w
             loss_opt = (per_sample_loss_opt * tr_keep).sum() / tr_keep.sum().clamp_min(1.0)
 
 
-            td_opt_abs = (q_sa - y_opt).abs().detach()
-            td_opt_abs = td_opt_abs * tr_keep + self.tr_eps  
+            # приоритет тоже по нормализованной |δ|
+            td_opt_abs = ((y_opt - q_sa).abs().detach() / sigma_t)
+            td_opt_abs = td_opt_abs * tr_keep + self.tr_eps
 
             # --- PARAM HEADS: Double per-parameter ---
             opt_names = [self.i2opt[int(i.item())] for i in action_o]
