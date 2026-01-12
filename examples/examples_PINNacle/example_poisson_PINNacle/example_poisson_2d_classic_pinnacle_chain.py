@@ -239,13 +239,13 @@ def poisson_2d_classic_experiment(grid_res):
         "min_grad_norm": 1e-5,
         "rl_buffer_size": 10000,
         "rl_batch_size": 32,
-        "n_transitions_reinit" : 2000,
+        "n_transitions_reinit" : 1000,
         "gamma": 0.9,
         "rl_reward_method": "absolute",
         "exact_solution": data_file,
         "reward_operator_coeff": 1,
         "reward_boundary_coeff": 1,
-        "lr": 1e-3,
+        "lr": 5e-4,
         "exp": experiment,
     }
 
