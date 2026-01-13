@@ -461,6 +461,20 @@ class DQNAgent:
             loss_arr_optim_class.append(float(loss_opt.item()))
             loss_arr_param.append(float(loss_param.item()))
 
+            with torch.no_grad():
+                delta_raw  = (y_opt - q_sa).detach()
+                delta_norm = (delta_raw / sigma_t)
+
+                mean_abs_delta_norm = float(delta_norm.abs().mean().item())
+                sigma_td = float(sigma)
+                q_abs_mean = float(q_sa.abs().mean().item())
+
+                # tr_drop_frac у тебя уже есть как drop_frac
+                # seq_avg_len у тебя уже есть как avg_len
+
+                prio_p95 = float(torch.quantile(new_priors.detach().to(self.device).float(), 0.95).item())
+
+
             print(f"Loss for params: {loss_param}")
             print(f"Loss for optim: {loss_opt}")
             print(f"Loss for both: {loss_opt + loss_param}")
@@ -497,14 +511,23 @@ class DQNAgent:
 
             frac_seq_success = count_seq_success / max(count_seq_total, 1)
 
+        self.exp.log_metrics({
+            "mean_abs_delta_norm": mean_abs_delta_norm,
+            "sigma_td": sigma_td,
+            "q_abs_mean": q_abs_mean,
+            "tr_drop_frac": drop_frac,
+            "seq_avg_len": avg_len,
+            "prio_p95": prio_p95,
+        }, step=self.steps_done)
 
-            self.exp.log_metrics({
-                "tr_drop_frac": drop_frac,
-                "mean_abs_delta": mean_abs_delta,
-                "seq_frac_len_gt1": frac_len_gt1,
-                "seq_avg_len": avg_len,
-                "seq_frac_success": frac_seq_success
-            }, step=self.steps_done)
+
+        self.exp.log_metrics({
+            "tr_drop_frac": drop_frac,
+            "mean_abs_delta": mean_abs_delta,
+            "seq_frac_len_gt1": frac_len_gt1,
+            "seq_avg_len": avg_len,
+            "seq_frac_success": frac_seq_success
+        }, step=self.steps_done)
 
 
         self.opt_step += 1
