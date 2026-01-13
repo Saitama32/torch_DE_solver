@@ -202,7 +202,8 @@ class PrioritizedReplayBuffer:
                     probs = (pr + self.eps) ** self.alpha
                 probs = probs / probs.sum()
 
-            replacement = N < batch_size
+            support = int((probs > 0).sum().item())
+            replacement = support < batch_size
             idxs = torch.multinomial(probs, batch_size, replacement=replacement)
 
             assert beta is not None, "beta must be provided for PER sampling"
