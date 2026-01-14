@@ -257,7 +257,7 @@ def poisson_2d_classic_experiment(grid_res):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 7000,
-        "experiment_key": "79992b6a93ab488894e8929de6cf22bb"
+        "experiment_key": "8dbe18ad737d481291323d8564ef4536"
     }
 
     experiment.log_parameters(rl_agent_params)
