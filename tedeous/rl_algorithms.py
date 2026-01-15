@@ -462,6 +462,7 @@ class DQNAgent:
                 mean_abs_delta_norm = float(delta_norm.abs().mean().item())
                 sigma_td = float(sigma)
                 q_abs_mean = float(q_sa.abs().mean().item())
+                y_opt_mean = float(y_opt.abs().mean().item())
 
                 # tr_drop_frac у тебя уже есть как drop_frac
                 # seq_avg_len у тебя уже есть как avg_len
@@ -509,13 +510,10 @@ class DQNAgent:
             "mean_abs_delta_norm": mean_abs_delta_norm,
             "sigma_td": sigma_td,
             "q_abs_mean": q_abs_mean,
+            "y_opt_mean": y_opt_mean,
             "tr_drop_frac": drop_frac,
             "seq_avg_len": avg_len,
             "prio_p95": prio_p95,
-        }, step=self.steps_done)
-
-
-        self.exp.log_metrics({
             "tr_drop_frac": drop_frac,
             "mean_abs_delta": mean_abs_delta,
             "seq_frac_len_gt1": frac_len_gt1,
