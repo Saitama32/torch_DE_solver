@@ -31,7 +31,7 @@ experiment.log_parameters({
 device = "cuda" if torch.cuda.is_available() else "cpu"
 solver_device(device)
 
-datapath = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../PINNacle_data/heat_longtime.npy.npy"))
+datapath = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../PINNacle_data/heat_longtime.npy"))
 
 m1, m2, k = 4, 2, 1
 
