@@ -1,10 +1,11 @@
 """Module of derivative calculations.
 """
 
-from typing import Any, Union, List, Tuple, Callable
+from typing import Any, Union, List, Tuple, Callable, Optional, Dict
 import numpy as np
 from scipy import linalg
 import torch
+from torch.func import functional_call, vmap, jacrev,  grad, jvp
 
 
 class DerivativeInt():
@@ -27,7 +28,8 @@ class Derivative_NN(DerivativeInt):
         """
         self.model = model
 
-    def take_derivative(self, term: Union[list, int, torch.Tensor], *args) -> torch.Tensor:
+    def take_derivative(self, term: Union[list, int, torch.Tensor], *args, **kwargs) -> torch.Tensor:
+
         """ Auxiliary function serves for single differential operator resulting field
         derivation.
 
@@ -56,7 +58,136 @@ class Derivative_NN(DerivativeInt):
         der_term = coeff * der_term
 
         return der_term
+    
+class Derivative_func(DerivativeInt):
+    """
+    Derivatives via torch.func (vmap + jacrev), cached per context.
+    Supports derivatives up to 2nd order: u, du/dx_i, d2u/dx_i dx_j.
+    """
 
+    def __init__(self, model: torch.nn.Module):
+        self.model = model
+
+        # context
+        self._points = None
+        self._points_ptr = None
+        self._create_graph = True
+
+        # parameter/buffer snapshot for functional_call (rebuilt per context)
+        self._pb = None
+
+        # caches
+        self._u = None          # [N, out]
+        self._J = None          # [N, out, dim]
+        self._H = None          # [N, out, dim, dim]  (not used currently)
+
+
+        self._param_versions = None
+
+    def _get_param_versions(self):
+        return tuple(p._version for p in self.model.parameters())
+
+    def set_context(self, points: torch.Tensor, create_graph: bool = True, u_cache: Optional[torch.Tensor] = None,) -> None:
+        self._points = points
+        self._points_ptr = points.data_ptr()
+        self._create_graph = create_graph
+
+        # rebuild params/buffers dict each context bind (params change during training)
+        params = dict(self.model.named_parameters())
+        buffers = dict(self.model.named_buffers())
+        self._pb = {**params, **buffers}
+
+        # reset caches
+        self._u = None
+        self._J = None
+        self._H = None
+
+        # build u and J eagerly (H lazily)
+        self._build_u_J()
+        # self._param_versions = self._get_param_versions()
+
+    def _ensure_context(self, points: torch.Tensor, create_graph: bool) -> None:
+        ptr = points.data_ptr()
+        # cur_versions = self._get_param_versions()
+
+        if (
+            self._points is None
+            or self._points_ptr != ptr
+            or self._create_graph != create_graph
+            # or self._param_versions != cur_versions   # ✅ веса обновились -> пересобрать
+        ):
+            self.set_context(points, create_graph=create_graph)
+
+    def _f_single(self, x_single: torch.Tensor) -> torch.Tensor:
+        # x_single: [dim] -> returns [out]
+        y = functional_call(self.model, self._pb, (x_single.unsqueeze(0),))  # [1, out]
+        return y.squeeze(0)  # [out]
+
+    def _build_u_J(self) -> None:
+        X = self._points  # [N, dim]
+        # u: [N, out]
+        self._u = vmap(self._f_single)(X)
+        # J: [N, out, dim]
+        self._J = vmap(jacrev(self._f_single))(X)
+
+    def _build_H(self) -> None:
+        if self._H is not None:
+            return
+        X = self._points
+        # H: [N, out, dim, dim]
+        self._H = vmap(jacrev(jacrev(self._f_single)))(X)
+
+    def _get_derivative(self, var: int, axis: Tuple[int, ...]) -> torch.Tensor:
+        # returns [N]
+        if not self._create_graph and len(axis) > 0:
+            return torch.zeros((self._points.shape[0],), device=self._points.device, dtype=self._points.dtype)
+
+        if len(axis) == 0:
+            return self._u[:, var]
+        if len(axis) == 1:
+            return self._J[:, var, axis[0]]
+        if len(axis) == 2:
+            self._build_H()
+            return self._H[:, var, axis[0], axis[1]]
+        raise NotImplementedError("Derivative_func supports derivatives up to 2nd order only.")
+
+    def take_derivative(
+        self,
+        term: dict,
+        grid_points: torch.Tensor,
+        create_graph: bool = True,
+        **kwargs
+    ) -> torch.Tensor:
+        # bind context to current grid_points
+        self._ensure_context(grid_points, create_graph=create_graph)
+
+        dif_dir = list(term.keys())[1]
+
+        if callable(term['coeff']):
+            coeff = term['coeff'](grid_points).reshape(-1, 1)
+        else:
+            coeff = term['coeff']
+
+        der_term = 1.0
+        for j, derivative in enumerate(term[dif_dir]):
+            v = int(term['var'][j])
+
+            if derivative == [None]:
+                d = self._get_derivative(v, ())
+            else:
+                d = self._get_derivative(v, tuple(derivative))
+
+            d = d.reshape(-1, 1)
+
+            p = term['pow'][j]
+            if isinstance(p, (int, float)):
+                der_term = der_term * (d ** p)
+            elif isinstance(p, Callable):
+                der_term = p(der_term * d)
+            else:
+                der_term = der_term * (d ** p)
+
+        return coeff * der_term
 
 class Derivative_autograd(DerivativeInt):
     """
@@ -69,13 +200,69 @@ class Derivative_autograd(DerivativeInt):
             model (torch.nn.Module): model of *autograd* mode.
         """
         self.model = model
+        # context (set per points-batch)
+        self._points = None
+        self._points_ptr = None
+        self._u_cache = None
+        self._create_graph = True
 
-    @staticmethod
-    def _nn_autograd(model: torch.nn.Module,
-                     points: torch.Tensor,
+        # caches
+        self._d_cache = {}      # (var, axis_tuple) -> tensor [N]
+        self._grad_cache = {}   # var -> tensor [N, dim]  (stores full grad for first derivatives)
+
+    def set_context(
+        self,
+        points: torch.Tensor,
+        u_cache: Optional[torch.Tensor] = None,
+        create_graph: bool = True,
+    ) -> None:
+        """
+        Bind caches to a specific points tensor (and optional precomputed u_cache).
+        Must be called when points/u_cache changes (Operator will call for PDE).
+        """
+        self._points = points
+        self._points_ptr = points.data_ptr()
+        self._u_cache = u_cache
+        self._create_graph = create_graph
+
+        self._d_cache.clear()
+        self._grad_cache.clear()
+
+    def _ensure_context(
+        self,
+        points: torch.Tensor,
+        u_cache: Optional[torch.Tensor],
+        create_graph: bool,
+    ) -> None:
+        """
+        If context differs, rebind it. If u_cache is not provided, will be computed lazily.
+        """
+        ptr = points.data_ptr()
+        if (
+            self._points is None
+            or self._points_ptr != ptr
+            or (u_cache is not None and self._u_cache is not u_cache)
+            or self._create_graph != create_graph
+        ):
+            # bind new context; u_cache may be None (lazy)
+            self.set_context(points, u_cache=u_cache, create_graph=create_graph)
+        else:
+            # same points; if caller provided u_cache and we don't have it yet, keep it
+            if u_cache is not None and self._u_cache is None:
+                self._u_cache = u_cache
+
+    def _u(self) -> torch.Tensor:
+        """
+        Returns u(points) and caches it in context.
+        """
+        if self._u_cache is None:
+            self._u_cache = self.model(self._points)
+        return self._u_cache
+
+
+    def _nn_autograd(self,
                      var: int,
-                     axis: List[int] = [0],
-                     create_graph: bool = True) -> torch.Tensor:
+                     axis: Tuple[int] ) -> torch.Tensor:
         """ Computes derivative on the grid using autograd method.
 
         Args:
@@ -89,20 +276,50 @@ class Derivative_autograd(DerivativeInt):
             gradient_full (torch.Tensor): the result of desired function differentiation
                 in corresponding axis.
         """
+        axis = tuple(axis)
+        key = (var, axis)
+        if key in self._d_cache:
+            return self._d_cache[key]
 
-        # Если граф не нужен (например, PSO без градиента) → сразу вернуть нули
-        if not create_graph:
-            return torch.zeros((points.shape[0], 1), device=points.device, dtype=points.dtype)
+        # if graph is not needed (e.g. PSO) keep old behavior: derivatives -> zeros
+        if not self._create_graph and len(axis) > 0:
+            out = torch.zeros((self._points.shape[0],), device=self._points.device, dtype=self._points.dtype)
+            self._d_cache[key] = out
+            return out
+        # points.requires_grad_(True)
 
-        points.requires_grad = True
-        fi = model(points)[:, var].sum(0)
-        for ax in axis:
-            grads, = torch.autograd.grad(fi, points, create_graph=create_graph)
-            fi = grads[:, ax].sum()
-        gradient_full = grads[:, axis[-1]].reshape(-1, 1)
+                # u
+        if len(axis) == 0:
+            gradient_full = self._u()[:, var]
+            self._d_cache[key] = gradient_full
+            return gradient_full
+
+                # first derivative: cache full grad(u_var) once
+        if len(axis) == 1:
+            ax0 = axis[0]
+            if var not in self._grad_cache:
+                g, = torch.autograd.grad(
+                    self._u()[:, var].sum(),
+                    self._points,
+                    create_graph=self._create_graph
+                )
+                self._grad_cache[var] = g  # [N, dim]
+            gradient_full = self._grad_cache[var][:, ax0]
+            self._d_cache[key] = gradient_full
+            return gradient_full
+
+        # higher order: d/d axis[-1] of previous derivative
+        prev = self._nn_autograd(var, axis[:-1])  # [N]
+        g, = torch.autograd.grad(
+            prev.sum(),
+            self._points,
+            create_graph=self._create_graph
+        )
+        gradient_full = g[:, axis[-1]]
+        self._d_cache[key] = gradient_full
         return gradient_full
 
-    def take_derivative(self, term: dict, grid_points:  torch.Tensor, create_graph: bool = True) -> torch.Tensor:
+    def take_derivative(self, term: dict, grid_points:  torch.Tensor, create_graph: bool = True, u_cache: torch.Tensor = None, **kwargs) -> torch.Tensor:
         """ Auxiliary function serves for single differential operator resulting field
         derivation.
 
@@ -113,6 +330,8 @@ class Derivative_autograd(DerivativeInt):
         Returns:
             der_term (torch.Tensor): resulting field, computed on a grid.
         """
+        # bind context (lazy u if u_cache is None)
+        self._ensure_context(grid_points, u_cache=u_cache, create_graph=create_graph)
 
         dif_dir = list(term.keys())[1]
         # it is may be int, function of grid or torch.Tensor
@@ -123,18 +342,23 @@ class Derivative_autograd(DerivativeInt):
 
         der_term = 1.
         for j, derivative in enumerate(term[dif_dir]):
+            v = int(term['var'][j])
             if derivative == [None]:
-                der = self.model(grid_points)[:, term['var'][j]].reshape(-1, 1)
+                d = self._nn_autograd(v, ())
             else:
-                der = self._nn_autograd(
-                    self.model, grid_points, term['var'][j], axis=derivative, create_graph=create_graph)
-            if isinstance(term['pow'][j], (int, float)):
-                der_term = der_term * der ** term['pow'][j]
-            elif isinstance(term['pow'][j], Callable):
-                der_term = term['pow'][j](der_term * der)
-        der_term = coeff * der_term
+                d = self._nn_autograd(v, tuple(derivative))
 
-        return der_term
+            d = d.reshape(-1, 1)
+
+            p = term['pow'][j]
+            if isinstance(p, (int, float)):
+                der_term = der_term * (d ** p)
+            elif isinstance(p, Callable):
+                der_term = p(der_term * d)
+            else:
+                der_term = der_term * (d ** p)
+
+        return coeff * der_term
 
 
 class Derivative_mat(DerivativeInt):
@@ -295,7 +519,8 @@ class Derivative_mat(DerivativeInt):
 
         return du
 
-    def take_derivative(self, term: torch.Tensor, grid_points: torch.Tensor) -> torch.Tensor:
+    def take_derivative(self, term: torch.Tensor, grid_points: torch.Tensor, **kwargs) -> torch.Tensor:
+
         """ Auxiliary function serves for single differential operator resulting field
         derivation.
 
@@ -363,6 +588,9 @@ class Derivative():
 
         elif strategy == 'autograd':
             return Derivative_autograd(self.model)
+        
+        elif strategy == 'func':
+            return Derivative_func(self.model)
 
         elif strategy == 'mat':
             return Derivative_mat(self.model, self.derivative_points)

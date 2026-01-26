@@ -1,6 +1,6 @@
 """Module for operatoins with operator and boundaru con-ns."""
 
-from typing import Tuple, Union, List, Callable
+from typing import Tuple, Union, List, Callable, Optional, Dict
 import torch
 
 from tedeous.points_type import Points_type
@@ -9,6 +9,8 @@ from tedeous.device import device_type, check_device
 from tedeous.utils import PadTransform
 
 from torch.utils.data import DataLoader
+
+from collections import defaultdict
 
 def integration(func: torch.Tensor,
                 grid: torch.Tensor,
@@ -114,6 +116,9 @@ class Operator():
         self.prepared_operator = prepared_operator
         self.model = model.to(device_type())
         self.mode = mode
+        self._vars_used = None
+        if self.mode == "autograd":
+            self._vars_used = self._collect_vars_used()
         self.weak_form = weak_form
         self.derivative_points = derivative_points
         if self.mode == 'NN':
@@ -126,14 +131,15 @@ class Operator():
             self.grid_loader =  DataLoader(self.sorted_grid, batch_size=self.batch_size, shuffle=True,
                                       generator=torch.Generator(device=device_type()))
             self.n_batches = len(self.grid_loader)
-            del self.sorted_grid
-            torch.cuda.empty_cache()
+            # del self.sorted_grid
+            # torch.cuda.empty_cache()
             self.init_mini_batches()
             self.current_batch_i = 0
         self.create_graph = True
-        self.derivative = Derivative(self.model,
-                                self.derivative_points).set_strategy(self.mode).take_derivative
-
+        # strategy = "func"  # хардкод для теста
+        # strategy = "autograd"  # хардкод для теста
+        self.derivative_obj = Derivative(self.model, self.derivative_points).set_strategy(strategy)
+        self.derivative = self.derivative_obj.take_derivative
     def init_mini_batches(self):
         """ Initialization of batch iterator.
 
@@ -141,9 +147,124 @@ class Operator():
         self.grid_iter = iter(self.grid_loader)
         self.grid_batch = next(self.grid_iter)
 
+    def _collect_vars_used(self) -> List[int]:
+        """
+        Collects output variables used by dict-terms in prepared_operator.
+        Safe: ignores non-dict terms.
+        """
+        vars_used = set()
+        for op in self.prepared_operator:
+            if not isinstance(op, dict):
+                continue
+            for _, term in op.items():
+                if isinstance(term, dict) and ("var" in term):
+                    for v in term["var"]:
+                        vars_used.add(int(v))
+        return sorted(vars_used)
+    
+    # def _get_derivative(
+    #     self,
+    #     var: int,
+    #     axis: Tuple[int, ...],
+    #     points: torch.Tensor,
+    #     u_cache: torch.Tensor,
+    #     deriv_cache: Dict[Tuple[int, Tuple[int, ...]], torch.Tensor],
+    #     grad1_cache: Dict[int, torch.Tensor],
+    # ) -> torch.Tensor:
+    #     """
+    #     Returns derivative d^{|axis|} u_var / d x_axis[0] ... d x_axis[k]
+    #     as a flat tensor shape [N]. Uses memoization.
+    #     """
+    #     key = (var, axis)
+    #     if key in deriv_cache:
+    #         return deriv_cache[key]  # [N]
+
+    #     # u itself
+    #     if len(axis) == 0:
+    #         out = u_cache[:, var]  # [N]
+    #         deriv_cache[key] = out
+    #         return out
+
+    #     # first derivative: use / build grad1_cache[var] = grad(u, points) -> [N, dim]
+    #     if len(axis) == 1:
+    #         ax0 = axis[0]
+    #         if var not in grad1_cache:
+    #             g, = torch.autograd.grad(
+    #                 u_cache[:, var].sum(),
+    #                 points,
+    #                 create_graph=self.create_graph
+    #             )
+    #             grad1_cache[var] = g
+    #         out = grad1_cache[var][:, ax0]  # [N]
+    #         deriv_cache[key] = out
+    #         return out
+
+    #     # higher order: d/d axis[-1] of previous derivative
+    #     prev = self._get_derivative(var, axis[:-1], points, u_cache, deriv_cache, grad1_cache)  # [N]
+    #     g, = torch.autograd.grad(
+    #         prev.sum(),
+    #         points,
+    #         create_graph=self.create_graph
+    #     )
+    #     out = g[:, axis[-1]]  # [N]
+    #     deriv_cache[key] = out
+    #     return out
+    
+
+    # def derivative_cached(
+    #     self,
+    #     term: dict,
+    #     points: torch.Tensor,
+    #     u_cache: torch.Tensor,
+    #     deriv_cache: Dict[Tuple[int, Tuple[int, ...]], torch.Tensor],
+    #     grad1_cache: Dict[int, torch.Tensor],
+    # ) -> torch.Tensor:
+    #     """
+    #     Computes one PDE term using cached derivatives (var, axis_tuple).
+
+    #     term format is assumed compatible with your Derivative_autograd:
+    #     term['coeff'], term['var'], term['pow'], and one derivative-key like 'd2u/dt2'
+    #     where term[dif_key] is list of axis-lists (e.g. [[1,1]] or [[0,0]] or [[None]])
+    #     """
+    #     # find derivative key safely (instead of list(term.keys())[1])
+    #     dif_keys = [k for k in term.keys() if k not in ("coeff", "var", "pow")]
+    #     if not dif_keys:
+    #         raise ValueError(f"Bad term format (no derivative key): {term}")
+    #     dif_key = dif_keys[0]
+
+    #     coeff = term["coeff"]
+    #     # keep same semantics as before: coeff may be scalar/tensor/callable
+    #     if callable(coeff):
+    #         coeff = coeff(points)
+
+    #     der_term = 1.0
+    #     for j, ax_list in enumerate(term[dif_key]):
+    #         v = int(term["var"][j])
+
+    #         # value or derivative
+    #         if ax_list == [None]:
+    #             d = self._get_derivative(v, tuple(), points, u_cache, deriv_cache, grad1_cache)  # [N]
+    #         else:
+    #             d = self._get_derivative(v, tuple(ax_list), points, u_cache, deriv_cache, grad1_cache)  # [N]
+
+    #         d = d.reshape(-1, 1)
+
+    #         p = term["pow"][j]
+    #         if isinstance(p, (int, float)):
+    #             der_term = der_term * (d ** p)
+    #         elif callable(p):
+    #             # preserve your existing callable(pow) convention
+    #             der_term = p(der_term * d)
+    #         else:
+    #             # fallback: try tensor pow
+    #             der_term = der_term * (d ** p)
+
+    #     return coeff * der_term
+
     def apply_operator(self,
                        operator: list,
-                       grid_points: Union[torch.Tensor, None]) -> torch.Tensor:
+                       grid_points: Union[torch.Tensor, None],
+                       ) -> torch.Tensor:
         """ Deciphers equation in a single grid subset to a field.
 
         Args:
@@ -155,13 +276,18 @@ class Operator():
         Returns:
             total (torch.Tensor): Decoded operator on a single grid subset.
         """
-        for term in operator:
-            term = operator[term]
+        # if self.mode == "autograd" and grid_points is not None and not grid_points.requires_grad:
+        #     # Boundary/operator calls may pass plain tensors; autograd derivatives need grad tracking.
+        #     grid_points = grid_points.detach().requires_grad_(True)
+
+        total = None
+        for term_key in operator:
+            term = operator[term_key]
+
             dif = self.derivative(term, grid_points, create_graph=self.create_graph)
-            try:
-                total += dif
-            except NameError:
-                total = dif
+
+            total = dif if total is None else (total + dif)
+
         return total
 
     def _pde_compute(self) -> torch.Tensor:
@@ -180,16 +306,34 @@ class Operator():
                 self.current_batch_i = -1
         else:
             sorted_grid = self.sorted_grid
+
+        # N = sorted_grid.shape[0]
+        # num_eq = len(self.prepared_operator)
+        # device = sorted_grid.device
+        # dtype = sorted_grid.dtype
+        # return torch.zeros((N, num_eq), device=device, dtype=dtype)
+
+        # autograd: работаем на локальном points, чтобы не мутировать исходный тензор
+        points = sorted_grid
+        u_cache = None
+        if self.mode == "autograd":
+            points = sorted_grid.detach().clone().requires_grad_(True)
+            u_cache = self.model(points)
+
+            # привязываем контекст и кеши к этому points/u_cache
+            # теперь все последующие take_derivative будут переиспользовать u_cache и производные
+            # ВАЖНО: set_context есть у Derivative_autograd (Architecture B)
+            self.derivative_obj.set_context(points, u_cache=u_cache, create_graph=self.create_graph)
+
         num_of_eq = len(self.prepared_operator)
         if num_of_eq == 1:
-            op = self.apply_operator(
-                self.prepared_operator[0], sorted_grid).reshape(-1,1)
+            op = self.apply_operator(self.prepared_operator[0], points).reshape(-1, 1)
         else:
             op_list = []
             for i in range(num_of_eq):
-                op_list.append(self.apply_operator(
-                    self.prepared_operator[i], sorted_grid).reshape(-1,1))
+                op_list.append(self.apply_operator(self.prepared_operator[i], points).reshape(-1, 1))
             op = torch.cat(op_list, 1)
+
         return op
 
     def _weak_pde_compute(self) -> torch.Tensor:
@@ -317,8 +461,20 @@ class Bounds():
 
         if self.mode == 'NN':
             b_op_val = self._apply_bconds_set(bop)
-        elif self.mode == 'autograd':
-            b_op_val = self.operator.apply_operator(bop, bnd)
+        # elif self.mode == 'autograd':
+        #     # Если кеш передали — используем его, чтобы внутри apply_operator не было повторных model(bnd)
+        #     # делаем локальный points для boundary, чтобы autograd.grad работал
+        #     points = bnd.detach().requires_grad_(True)
+        #     # можно заранее посчитать u_cache одним forward, чтобы не было лишнего
+        #     u_cache = self.model(points)
+        #     # привязать контекст кеша производных к этим boundary points
+        #     self.operator.derivative_obj.set_context(points, u_cache=u_cache, create_graph=self.operator.create_graph)
+
+        #     b_op_val = self.operator.apply_operator(bop, bnd)
+
+        elif self.mode in ('autograd'):
+            points = bnd.detach().clone().requires_grad_(True)
+            b_op_val = self.operator.apply_operator(bop, points)
         elif self.mode == 'mat':
             var = bop[list(bop.keys())[0]]['var'][0]
             b_op_val = self.operator.apply_operator(bop, self.grid)
@@ -407,7 +563,7 @@ class Bounds():
             b_op_val = self._apply_neumann(bnd, bop).reshape(-1, 1)
         return b_op_val
 
-    def b_op_val_calc(self, bcond: dict) -> torch.Tensor:
+    def b_op_val_calc(self, bcond: dict, u_cache: torch.Tensor = None) -> torch.Tensor:
         """ Auxiliary function. Serves only to choose *type* of the condition and evaluate one.
 
         Args:
@@ -435,6 +591,10 @@ class Bounds():
     def apply_bcs(self) -> Tuple[torch.Tensor, torch.Tensor, list, list]:
         """ Applies boundary and data conditions for each *type* in prepared_bconds.
 
+        Optimization:
+            batch ALL dirichlet conditions into a single forward (for NN/autograd modes)
+            operator/derivative conditions are still computed separately (2-forward strategy)
+
         Returns:
             bval (torch.Tensor): matrix, where each column is predicted
                       boundary values of one boundary type.
@@ -444,20 +604,60 @@ class Bounds():
             bval_length (list): list of length of each boundary type column.
         """
 
-        bval_dict = {}
-        true_bval_dict = {}
+        bval_lists = defaultdict(list)
+        true_lists = defaultdict(list)
 
-        for bcond in self.prepared_bconds:
-            try:
-                bval_dict[bcond['type']] = torch.cat((bval_dict[bcond['type']],
-                                                    self.b_op_val_calc(bcond).reshape(-1)))
-                true_bval_dict[bcond['type']] = torch.cat((true_bval_dict[bcond['type']],
-                                                    bcond['bval'].reshape(-1)))
-            except:
-                bval_dict[bcond['type']] = self.b_op_val_calc(bcond).reshape(-1)
-                true_bval_dict[bcond['type']] = bcond['bval'].reshape(-1)
+        # p = next(self.model.parameters())
+        # z = (p.sum() * 0.0)  # scalar with grad_fn
 
-        bval, true_bval, keys, bval_length = dict_to_matrix(
-                                                    bval_dict, true_bval_dict)
+        # bval = z.reshape(1, 1)
+        # true_bval = z.reshape(1, 1)
 
+        # keys = ["stub"]
+        # bval_length = [1]
+        # return bval, true_bval, keys, bval_length
+        # ---------- Dirichlet batch (NN/autograd only) ----------
+        dir_indices = []
+        if self.mode in ("NN", "autograd"):
+            dir_indices = [i for i, bc in enumerate(self.prepared_bconds) if bc["type"] == "dirichlet"]
+
+        if dir_indices:
+            bnds = [self.prepared_bconds[i]["bnd"] for i in dir_indices]
+            lens = [b.shape[0] for b in bnds]
+
+            B = torch.cat(bnds, dim=0)
+            U = self.model(B)
+
+            offset = 0
+            for i, n in zip(dir_indices, lens):
+                bc = self.prepared_bconds[i]
+                var = bc["var"]
+
+                pred = U[offset:offset + n, var].reshape(-1)
+                true = bc["bval"].reshape(-1)
+
+                bval_lists["dirichlet"].append(pred)
+                true_lists["dirichlet"].append(true)
+
+                offset += n
+
+        # ---------- Other BCs (operator/neumann/data/etc.) ----------
+        for i, bc in enumerate(self.prepared_bconds):
+            btype = bc["type"]
+
+            # dirichlet already handled above for NN/autograd
+            if btype == "dirichlet" and self.mode in ("NN", "autograd"):
+                continue
+
+            pred = self.b_op_val_calc(bc).reshape(-1)
+            true = bc["bval"].reshape(-1)
+
+            bval_lists[btype].append(pred)
+            true_lists[btype].append(true)
+
+        # ---------- Pack to dict for dict_to_matrix ----------
+        bval_dict = {k: torch.cat(v, dim=0) for k, v in bval_lists.items()}
+        true_bval_dict = {k: torch.cat(v, dim=0) for k, v in true_lists.items()}
+
+        bval, true_bval, keys, bval_length = dict_to_matrix(bval_dict, true_bval_dict)
         return bval, true_bval, keys, bval_length

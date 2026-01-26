@@ -174,7 +174,7 @@ class Solution():
             else:
                 self.save_op = torch.cat((self.save_op, self.op), 0) # cat curent losses to previous
             self.operator.current_batch_i += 1
-            del self.op
-            torch.cuda.empty_cache()
+            # del self.op
+            # torch.cuda.empty_cache()
 
         return self.loss, self.loss_normalized
