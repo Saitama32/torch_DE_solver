@@ -89,7 +89,7 @@ def get_trajectory_dataset(saved_trajectories, normalize=True):
     return ModelParamsDataset(saved_trajectories, transform=normalizer if normalize else None), normalizer
 
 
-def get_trajectory_dataloader(batch_size, models=None, pt_files=None, normalize=True, shuffle=True, device=None):
+def get_trajectory_dataloader(batch_size, models=None, pt_files=None, normalize=True, shuffle=True, device='cuda'):
     dataset, normalizer = get_trajectory_dataset(models if models else pt_files, normalize=normalize)
 
     if models:

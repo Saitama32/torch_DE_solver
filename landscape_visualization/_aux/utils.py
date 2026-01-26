@@ -174,9 +174,9 @@ class PaddedConcatDataset(Dataset):
         return max(len(self.dataset1), len(self.dataset2))
 
 
-def get_gridpoint_and_trajectory_datasets(pt_files, path, grid_step=0.1, batch_size=32):
+def get_gridpoint_and_trajectory_datasets(models, pt_files, path, grid_step=0.1, batch_size=32):
     dataset_gridpoint = get_gridpoint_dataset(grid_step=grid_step)
-    dataset_trajectory, _ = get_trajectory_dataset(pt_files, path)
+    dataset_trajectory, _ = get_trajectory_dataset(models, path)
 
     concat_dataset = PaddedConcatDataset(dataset_gridpoint, dataset_trajectory)
 
