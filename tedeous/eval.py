@@ -138,7 +138,7 @@ class Operator():
         self.create_graph = True
         # strategy = "func"  # хардкод для теста
         # strategy = "autograd"  # хардкод для теста
-        self.derivative_obj = Derivative(self.model, self.derivative_points).set_strategy(strategy)
+        self.derivative_obj = Derivative(self.model, self.derivative_points).set_strategy(self.mode)
         self.derivative = self.derivative_obj.take_derivative
     def init_mini_batches(self):
         """ Initialization of batch iterator.
