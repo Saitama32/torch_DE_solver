@@ -33,7 +33,7 @@ def check_device(data: Any):
     Returns:
         data (Any): data with correct device
     """
-    device = torch.tensor([0.]).device
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     if isinstance(data, torch.Tensor):
         if data.device != device:
             return data.to(device)
@@ -49,6 +49,6 @@ def check_device(data: Any):
 def device_type():
     """ Return the default device.
     """
-    return torch.tensor([0.]).device.type
+    return "cuda" if torch.cuda.is_available() else "cpu"
 
 

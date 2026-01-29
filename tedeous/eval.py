@@ -140,6 +140,19 @@ class Operator():
         # strategy = "autograd"  # хардкод для теста
         self.derivative_obj = Derivative(self.model, self.derivative_points).set_strategy(self.mode)
         self.derivative = self.derivative_obj.take_derivative
+        self._op_buf = None
+        self._points_leaf = self.sorted_grid.detach().requires_grad_(True)
+    #     self.prepare_op_buffer()
+
+    #     # self._static_op = None
+
+    # def prepare_op_buffer(self):
+    #     N = self.sorted_grid.shape[0]
+    #     num_eq = len(self.prepared_operator)
+
+    #     self._op_buf = torch.empty((N, num_eq),  device=device_type())
+
+
     def init_mini_batches(self):
         """ Initialization of batch iterator.
 
@@ -307,17 +320,11 @@ class Operator():
         else:
             sorted_grid = self.sorted_grid
 
-        # N = sorted_grid.shape[0]
-        # num_eq = len(self.prepared_operator)
-        # device = sorted_grid.device
-        # dtype = sorted_grid.dtype
-        # return torch.zeros((N, num_eq), device=device, dtype=dtype)
-
         # autograd: работаем на локальном points, чтобы не мутировать исходный тензор
         points = sorted_grid
         u_cache = None
         if self.mode == "autograd":
-            points = sorted_grid.detach().clone().requires_grad_(True)
+            points = self._points_leaf 
             u_cache = self.model(points)
 
             # привязываем контекст и кеши к этому points/u_cache
@@ -326,13 +333,21 @@ class Operator():
             self.derivative_obj.set_context(points, u_cache=u_cache, create_graph=self.create_graph)
 
         num_of_eq = len(self.prepared_operator)
+
         if num_of_eq == 1:
-            op = self.apply_operator(self.prepared_operator[0], points).reshape(-1, 1)
+            op = self.apply_operator(self.prepared_operator[0], points).view(-1, 1)
+            # self._op_buf[:, 0:1].copy_(col)   
         else:
             op_list = []
             for i in range(num_of_eq):
-                op_list.append(self.apply_operator(self.prepared_operator[i], points).reshape(-1, 1))
+                col  = self.apply_operator(self.prepared_operator[i], points).reshape(-1, 1)
+                # self._op_buf[:, i].copy_(col)
+                op_list.append(col)
             op = torch.cat(op_list, 1)
+
+        # перед return op
+        if self.mode == "autograd":
+            self.derivative_obj.clear_context()
 
         return op
 
@@ -473,7 +488,7 @@ class Bounds():
         #     b_op_val = self.operator.apply_operator(bop, bnd)
 
         elif self.mode in ('autograd'):
-            points = bnd.detach().clone().requires_grad_(True)
+            points = bnd.detach().requires_grad_(True)
             b_op_val = self.operator.apply_operator(bop, points)
         elif self.mode == 'mat':
             var = bop[list(bop.keys())[0]]['var'][0]
@@ -482,6 +497,9 @@ class Bounds():
             for position in bnd:
                 b_val.append(b_op_val[var][position])
             b_op_val = torch.cat(b_val).reshape(-1, 1)
+
+        if self.mode == "autograd":
+            self.operator.derivative_obj.clear_context()
         return b_op_val
 
     def _apply_periodic(self, bnd: torch.Tensor, bop: list, var: int) -> torch.Tensor:

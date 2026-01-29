@@ -37,7 +37,7 @@ from tedeous.optimizers.closure import Closure
 # CONFIG (edit these)
 # =========================
 CONFIG = dict(
-    grid_res=300,
+    grid_res=100,
     neurons=100,
     steps=300,          # measured steps
     warmup_steps=50,    # not measured
@@ -49,6 +49,7 @@ CONFIG = dict(
     device="auto",      # "auto" | "cpu" | "gpu"
     seed=0,
     silent=True,        # suppress prints inside training
+    use_cudagraph=True,  # True для ускорения на CUDA
 )
 # =========================
 
@@ -157,6 +158,7 @@ def build_model(grid_res: int, neurons: int, lambda_operator: float, lambda_boun
     net = ForwardCounter(base_net)
     model = Model(net, domain, equation, boundaries)
     model.compile('autograd', lambda_operator=lambda_operator, lambda_bound=lambda_bound)
+    # print(model.solution_cls.prepared_operator)
 
     return model, net
 
@@ -179,7 +181,7 @@ def bench_once(
     model, net = build_model(grid_res, neurons, lambda_operator, lambda_bound)
 
     # Build optimizer + closure exactly like Model.train would do
-    opt_wrap = Optimizer('Adam', {'lr': lr})
+    opt_wrap = Optimizer('Adam', {'lr': lr, 'capturable': True})
     torch_opt = opt_wrap.optimizer_choice(model.mode, model.solution_cls.model)
     model.optimizer = torch_opt 
     closure = Closure(mixed_precision, model).get_closure(torch_opt)
@@ -191,24 +193,80 @@ def bench_once(
     with ctx:
         # Warmup (not measured)
         net.reset()
-        for _ in range(warmup_steps):
-            torch_opt.zero_grad(set_to_none=True)
-            torch_opt.step(closure)
+
+        # for _ in range(warmup_steps):
+        #     torch_opt.zero_grad(set_to_none=True)
+        #     torch_opt.step(closure)
 
         if device_type() == "cuda":
             torch.cuda.synchronize()
             torch.cuda.reset_peak_memory_stats()
 
-        # Timed section
+                # --- Capture with CUDA Graph (optional) ---
+        use_cudagraph = (CONFIG.get("use_cudagraph", False) and device_type() == "cuda")
+
+        if use_cudagraph:
+            # Важно: для CUDA graph нужен capturable optimizer + стабильные grad buffers
+            # 1) не set_to_none=True
+            # 2) заранее выделить p.grad
+            for p in model.solution_cls.model.parameters():
+                if p.grad is None:
+                    p.grad = torch.zeros_like(p)
+
+            # статический буфер, чтобы можно было читать loss после replay (не обязательно)
+            static_loss = torch.zeros(1, device=device_type())
+
+            # прогрев allocator'а под именно этот шаг
+            for _ in range(5):
+                # for p in model.solution_cls.model.parameters():
+                #     p.grad.zero_()
+                torch_opt.step(closure)
+
+            torch.cuda.synchronize()
+            g = torch.cuda.CUDAGraph()
+            pool = torch.cuda.graph_pool_handle()
+
+            # Критично: во время capture никаких новых CPU-решений.
+            # Мы "записываем" один полный train-step как последовательность CUDA kernels.
+
+            # capture_stream = torch.cuda.Stream()
+            # capture_stream.wait_stream(torch.cuda.current_stream())
+
+            # with torch.cuda.stream(capture_stream):
+            #     op = model.solution_cls.operator
+            #     op.prepare_op_buffer()          # аллокация на capture_stream
+            #     op._op_buf.zero_()              # touch на capture_stream
+            #     torch.cuda.synchronize()        # или capture_stream.synchronize()
+
+            # torch.cuda.current_stream().wait_stream(capture_stream)
+            # torch.cuda.synchronize()
+
+            with torch.cuda.graph(g, pool):
+                # for p in model.solution_cls.model.parameters():
+                #     p.grad.zero_()  # это станет CUDA kernels в графе
+                loss = torch_opt.step(closure)  # closure + backward + adam update
+                # Adam.step возвращает loss (если closure не None)
+                static_loss.copy_(loss)
+
+            torch.cuda.synchronize()
+
+
+                # Timed section
         net.reset()
-        if device_type() == "cuda":
-            torch.cuda.synchronize()
+        # if device_type() == "cuda":
+        #     # torch.cuda.synchronize()
+
         t0 = time.perf_counter()
-        for _ in range(steps):
-            torch_opt.zero_grad(set_to_none=True)
-            torch_opt.step(closure)
-        if device_type() == "cuda":
+        if use_cudagraph:
+            for _ in range(steps):
+                g.replay()
             torch.cuda.synchronize()
+        else:
+            for _ in range(steps):
+                torch_opt.zero_grad(set_to_none=True)
+                torch_opt.step(closure)
+            if device_type() == "cuda":
+                torch.cuda.synchronize()
         t1 = time.perf_counter()
 
     sec_per_step = (t1 - t0) / steps

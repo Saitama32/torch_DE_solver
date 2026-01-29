@@ -48,7 +48,7 @@ class Closure():
             raise NotImplementedError("AMP and the LBFGS optimizer are not compatible.")
 
     def _closure(self):
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=False)
         with torch.autocast(device_type=self.device,
                             dtype=self.dtype,
                             enabled=self.mixed_precision):
@@ -60,8 +60,9 @@ class Closure():
         else:
             loss.backward()
 
-        self.model.cur_loss = loss_normalized if self.normalized_loss_stop else loss
+        self.model.cur_loss = (loss_normalized if self.normalized_loss_stop else loss).detach()
 
+        self.model.solution_cls.clear_context()
         return loss
 
     def _closure_pso(self):
@@ -151,3 +152,4 @@ class Closure():
             return self._closure_nncg
         else:
             return self._closure
+        

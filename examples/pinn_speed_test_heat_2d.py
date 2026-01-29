@@ -28,6 +28,7 @@ from contextlib import redirect_stdout
 
 import numpy as np
 import torch
+import gc
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -44,14 +45,14 @@ from tedeous.optimizers.closure import Closure
 # =========================
 CONFIG = dict(
     # Grid: x,y,t
-    grid_res_xy=40,      # start small to avoid OOM
-    grid_res_t=40,       # time resolution separate from space
-    t_max=100.0,         # long-time interval like in the example :contentReference[oaicite:2]{index=2}
+    grid_res_xy=30,      # start small to avoid OOM
+    grid_res_t=30,       # time resolution separate from space
+    t_max=30.0,         # long-time interval like in the example :contentReference[oaicite:2]{index=2}
 
     neurons=100,
     layers=6,            # number of hidden Linear+Tanh blocks (keep moderate)
-    steps=300,           # measured steps
-    warmup_steps=50,     # not measured
+    steps=30,           # measured steps
+    warmup_steps=5,     # not measured
     repeats=5,
     lr=1e-3,
 
@@ -62,6 +63,9 @@ CONFIG = dict(
     device="auto",           # "auto" | "cpu" | "gpu"
     seed=0,
     silent=True,
+    
+    use_cuda_graph=True,        # <- включай для теста на CUDA
+    cuda_graph_warmup=5,         # eager шаги перед capture (инициализация Adam state и кешей)
 
     # If you keep your "clone() in BC operator points" fix, leave it as is in library.
 )
@@ -233,7 +237,8 @@ def bench_once() -> tuple[float, float, dict]:
         lambda_bound=CONFIG["lambda_bound"],
     )
 
-    opt_wrap = Optimizer("Adam", {"lr": CONFIG["lr"]})
+    opt_wrap = Optimizer("AdamW", {"lr": CONFIG["lr"],
+                                  "capturable": True })
     torch_opt = opt_wrap.optimizer_choice(model.mode, model.solution_cls.model)
     model.optimizer = torch_opt
 
@@ -242,6 +247,8 @@ def bench_once() -> tuple[float, float, dict]:
         loss, _ = model.solution_cls.evaluate()
         return loss
 
+    # compile_evaluate у тебя для PINN с autograd.grad(create_graph=True) часто упирается в double backward,
+    # так что оставляй False, но код не ломаем — просто сохраняем возможность.
     if CONFIG["compile_evaluate"]:
         loss_fn = torch.compile(
             loss_fn,
@@ -250,36 +257,98 @@ def bench_once() -> tuple[float, float, dict]:
             dynamic=False,
         )
 
-    # --- closure used by optimizer.step ---
-    def compiled_closure():
-        torch_opt.zero_grad(set_to_none=True)
+    # --- один "ручной" шаг оптимизации (лучше для CUDA Graph) ---
+    def train_step():
+        # ВАЖНО: set_to_none=False, чтобы не было новых аллокаций градиентов
+        torch_opt.zero_grad(set_to_none=False)
         loss = loss_fn()
         loss.backward()
+        torch_opt.step()
         return loss
 
     stdout_buf = io.StringIO()
     ctx = redirect_stdout(stdout_buf) if CONFIG["silent"] else nullcontext()
 
     with ctx:
-        # warmup
+        # --------------------
+        # WARMUP (не измеряем)
+        # --------------------
         net.reset()
-        for _ in range(CONFIG["warmup_steps"]):
-            torch_opt.step(compiled_closure)
+
+        # eager warmup: прогрев CUDA + создание Adam state
+        warmup_total = max(CONFIG["warmup_steps"], CONFIG.get("cuda_graph_warmup", 0))
+        for _ in range(warmup_total):
+            train_step()
+
+        gc.collect()
 
         if device_type() == "cuda":
             torch.cuda.synchronize()
             torch.cuda.reset_peak_memory_stats()
 
-        # timed
+        # --------------------
+        # TIMED
+        # --------------------
         net.reset()
-        if device_type() == "cuda":
+
+        use_graph = bool(CONFIG.get("use_cuda_graph", False)) and (device_type() == "cuda")
+
+        if use_graph:
+            # 0) прогрев CUDA/cublas до capture
             torch.cuda.synchronize()
-        t0 = time.perf_counter()
-        for _ in range(CONFIG["steps"]):
-            torch_opt.step(compiled_closure)
-        if device_type() == "cuda":
+            _ = (torch.randn(1024, 1024, device="cuda") @ torch.randn(1024, 1024, device="cuda"))
             torch.cuda.synchronize()
-        t1 = time.perf_counter()
+
+            # 1) заранее материализуем grad буферы (статические адреса)
+            for p in model.solution_cls.model.parameters():
+                if p.grad is None:
+                    p.grad = torch.zeros_like(p)
+
+            torch_opt.zero_grad(set_to_none=False)
+
+            static_loss = torch.zeros((), device=next(model.solution_cls.model.parameters()).device)
+
+            g = torch.cuda.CUDAGraph()  # keep_graph=False
+            pool = torch.cuda.graphs.graph_pool_handle()
+
+            # 2) ещё один eager шаг перед capture — чтобы кеши/ветки уже “устаканились”
+            train_step()
+            torch.cuda.synchronize()
+
+            # 3) CAPTURE + немедленный REPLAY тест (чтобы падало “там”, где причина)
+            torch.cuda.synchronize()
+            try:
+                with torch.cuda.graph(g, pool=pool):
+                    loss = train_step()
+                    static_loss.copy_(loss)
+
+                torch.cuda.synchronize()
+                g.replay()
+                torch.cuda.synchronize()
+
+            except BaseException as e:
+                # ВАЖНО: не продолжаем в этом процессе. Иначе “липкая” ошибка выстрелит на zero_grad.
+                print("CUDA Graph capture/replay failed:", repr(e))
+                raise
+
+            # 4) TIMED REPLAY
+            torch.cuda.synchronize()
+            t0 = time.perf_counter()
+            for _ in range(CONFIG["steps"]):
+                g.replay()
+            torch.cuda.synchronize()
+            t1 = time.perf_counter()
+
+        else:
+            # обычный eager режим
+            if device_type() == "cuda":
+                torch.cuda.synchronize()
+            t0 = time.perf_counter()
+            for _ in range(CONFIG["steps"]):
+                train_step()
+            if device_type() == "cuda":
+                torch.cuda.synchronize()
+            t1 = time.perf_counter()
 
     mem = {}
     if device_type() == "cuda":
@@ -287,14 +356,19 @@ def bench_once() -> tuple[float, float, dict]:
         mem = get_cuda_mem_stats()
 
     sec_per_step = (t1 - t0) / CONFIG["steps"]
+
+    # В CUDA Graph режиме forwards/step для ForwardCounter будет ~0 (replay не вызывает forward()).
     forwards_per_step = net.n_forwards / CONFIG["steps"]
+
     return sec_per_step, forwards_per_step, mem
 
 
 
+
 def main():
-    torch.manual_seed(CONFIG["seed"])
+    # os.environ['TORCH_USE_CUDA_DSA'] = 'True'
     np.random.seed(CONFIG["seed"])
+    torch.manual_seed(CONFIG["seed"])
 
     if CONFIG["device"] == "auto":
         solver_device("gpu" if torch.cuda.is_available() else "cpu")

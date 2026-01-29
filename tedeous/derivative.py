@@ -210,6 +210,13 @@ class Derivative_autograd(DerivativeInt):
         self._d_cache = {}      # (var, axis_tuple) -> tensor [N]
         self._grad_cache = {}   # var -> tensor [N, dim]  (stores full grad for first derivatives)
 
+    def clear_context(self) -> None:
+        self._points = None
+        self._points_ptr = None
+        self._u_cache = None
+        self._d_cache.clear()
+        self._grad_cache.clear()
+
     def set_context(
         self,
         points: torch.Tensor,
@@ -297,9 +304,10 @@ class Derivative_autograd(DerivativeInt):
                 # first derivative: cache full grad(u_var) once
         if len(axis) == 1:
             ax0 = axis[0]
+            outputs = self._u()[:, var].sum()
             if var not in self._grad_cache:
                 g, = torch.autograd.grad(
-                    self._u()[:, var].sum(),
+                    outputs,
                     self._points,
                     create_graph=self._create_graph
                 )
@@ -317,6 +325,7 @@ class Derivative_autograd(DerivativeInt):
         )
         gradient_full = g[:, axis[-1]]
         self._d_cache[key] = gradient_full
+
         return gradient_full
 
     def take_derivative(self, term: dict, grid_points:  torch.Tensor, create_graph: bool = True, u_cache: torch.Tensor = None, **kwargs) -> torch.Tensor:
@@ -357,6 +366,8 @@ class Derivative_autograd(DerivativeInt):
                 der_term = p(der_term * d)
             else:
                 der_term = der_term * (d ** p)
+
+        # self.clear_context()
 
         return coeff * der_term
 

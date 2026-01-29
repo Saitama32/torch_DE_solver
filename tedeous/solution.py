@@ -88,6 +88,15 @@ class Solution():
         self.bval_list = []
         self.loss_list = []
 
+    def clear_context(self):
+        """ Clear saved context in operator and boundary objects.
+        """
+        self.op = None
+        self.bval, self.true_bval, self.bval_keys, self.bval_length = None, None, None, None
+        self.bval_keys, self.bval_length = None, None
+        self.loss, self.loss_normalized = None, None
+
+
     @staticmethod
     def _operator_coeff(equal_cls: Any, operator: list):
         """ Coefficient checking in operator.
@@ -152,12 +161,16 @@ class Solution():
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: loss
         """
+
+            
         self.operator.create_graph = create_graph
         self.boundary.operator.create_graph = create_graph
+
         self.op = self.operator.operator_compute()
-        self.bval, self.true_bval,\
-            self.bval_keys, self.bval_length = self.boundary.apply_bcs()
         dtype = self.op.dtype
+
+        self.bval, self.true_bval, self.bval_keys, self.bval_length = self.boundary.apply_bcs()
+
         self.lambda_operator = lambda_prepare(self.op, self.lambda_operator).to(dtype)
         self.lambda_bound = lambda_prepare(self.bval, self.lambda_bound).to(dtype)
 
@@ -168,13 +181,12 @@ class Solution():
             self.lambda_operator,
             self.lambda_bound,
             save_graph)
+        
         if self.batch_size is not None: 
             if self.operator.current_batch_i == 0: # if first batch in epoch
                 self.save_op = self.op
             else:
                 self.save_op = torch.cat((self.save_op, self.op), 0) # cat curent losses to previous
             self.operator.current_batch_i += 1
-            # del self.op
-            # torch.cuda.empty_cache()
 
         return self.loss, self.loss_normalized
