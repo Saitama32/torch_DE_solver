@@ -3,7 +3,7 @@ from comet_ml.integration.pytorch import log_model
 
 experiment = start(
   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_KS_tolerance",   
+  project_name="rlpinn_KS_farm_transitions",   
   workspace="saitama32"
 )
 import torch
@@ -27,7 +27,7 @@ from tedeous.utils import exact_solution_data
 experiment.log_parameters({
     "param": "v_1",
     "reward_function": "v_2",
-    "description": "farm_transitions_Heat_2d_long_time_basic_RL_optimizer"
+    "description": "farm_transitions_KS_time_basic_RL_optimizer"
 })
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -243,7 +243,7 @@ def kuramoto_sivashinsky_experiment(grid_res):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 0.0,
+        "tolerance": 1.53767743582985,
         "prev_tol": 0.0,
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
