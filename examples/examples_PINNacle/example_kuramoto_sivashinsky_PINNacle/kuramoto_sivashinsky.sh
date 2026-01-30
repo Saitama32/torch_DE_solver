@@ -14,10 +14,10 @@ if [ "$NUM_GPUS" -eq 0 ]; then
 fi
 
 if [ "$NUM_GPUS" -eq 1 ]; then
-    echo "Запускаем 2 процесса на одной GPU..."
+    echo "Запускаем 1 процесс на одной GPU..."
     CUDA_VISIBLE_DEVICES=0 python "$SCRIPT" 
 elif [ "$NUM_GPUS" -ge 2 ]; then
-    echo "Запускаем по 2 процесса на каждую из двух GPU..."
+    echo "Запускаем по 1 процессу на каждую из двух GPU..."
     CUDA_VISIBLE_DEVICES=0 python "$SCRIPT" &
     CUDA_VISIBLE_DEVICES=1 python "$SCRIPT" &
 else
