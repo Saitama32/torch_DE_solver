@@ -237,10 +237,10 @@ class Derivative_autograd(DerivativeInt):
         """
         If context differs, rebind it. If u_cache is not provided, will be computed lazily.
         """
-        ptr = points.data_ptr()
+        # ptr = points.data_ptr()
         if (
             self._points is None
-            or self._points_ptr != ptr
+            or self._points is not points
             or (u_cache is not None and self._u_cache is not u_cache)
             or self._create_graph != create_graph
         ):

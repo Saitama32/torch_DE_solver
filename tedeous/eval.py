@@ -140,6 +140,7 @@ class Operator():
         # strategy = "autograd"  # хардкод для теста
         self.derivative_obj = Derivative(self.model, self.derivative_points).set_strategy(self.mode)
         self.derivative = self.derivative_obj.take_derivative
+
     def init_mini_batches(self):
         """ Initialization of batch iterator.
 
@@ -317,7 +318,7 @@ class Operator():
         points = sorted_grid
         u_cache = None
         if self.mode == "autograd":
-            points = sorted_grid.detach().clone().requires_grad_(True)
+            points = sorted_grid.detach().requires_grad_(True)
             u_cache = self.model(points)
 
             # привязываем контекст и кеши к этому points/u_cache
@@ -473,7 +474,10 @@ class Bounds():
         #     b_op_val = self.operator.apply_operator(bop, bnd)
 
         elif self.mode in ('autograd'):
-            points = bnd.detach().clone().requires_grad_(True)
+            # points = bnd.detach().clone().requires_grad_(True)
+            points = bnd.detach().requires_grad_(True)
+            u_cache = self.model(points)
+            self.operator.derivative_obj.set_context(points, u_cache=u_cache, create_graph=self.operator.create_graph)
             b_op_val = self.operator.apply_operator(bop, points)
         elif self.mode == 'mat':
             var = bop[list(bop.keys())[0]]['var'][0]
@@ -617,6 +621,7 @@ class Bounds():
         # bval_length = [1]
         # return bval, true_bval, keys, bval_length
         # ---------- Dirichlet batch (NN/autograd only) ----------
+        
         dir_indices = []
         if self.mode in ("NN", "autograd"):
             dir_indices = [i for i, bc in enumerate(self.prepared_bconds) if bc["type"] == "dirichlet"]

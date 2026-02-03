@@ -37,7 +37,7 @@ from tedeous.optimizers.closure import Closure
 # CONFIG (edit these)
 # =========================
 CONFIG = dict(
-    grid_res=300,
+    grid_res=100,
     neurons=100,
     steps=300,          # measured steps
     warmup_steps=50,    # not measured
@@ -157,6 +157,12 @@ def build_model(grid_res: int, neurons: int, lambda_operator: float, lambda_boun
     net = ForwardCounter(base_net)
     model = Model(net, domain, equation, boundaries)
     model.compile('autograd', lambda_operator=lambda_operator, lambda_bound=lambda_bound)
+
+    grid = domain.build('NN').to('cuda')
+    u_exact = exact_func(grid)
+    u_pred= net(grid)
+    mse_init = torch.mean((u_exact - u_pred.squeeze())**2).item()
+    print(f"Initial MSE: {mse_init:.6e}") 
 
     return model, net
 
