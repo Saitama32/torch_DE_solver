@@ -427,7 +427,7 @@ class Bounds():
         field_part = torch.cat(field_part)
         return field_part
 
-    def _apply_dirichlet(self, bnd: torch.Tensor, var: int) -> torch.Tensor:
+    def _apply_dirichlet(self, bnd: torch.Tensor, var: int, u_cache: torch.Tensor = None, sl: slice = None) -> torch.Tensor:
         """ Applies Dirichlet boundary conditions.
 
         Args:
@@ -439,6 +439,9 @@ class Bounds():
         Returns:
             torch.Tensor: calculated boundary condition.
         """
+        # use cache if provided (for autograd efficiency)
+        if u_cache is not None and sl is not None:
+            return u_cache[sl, var].reshape(-1, 1)
 
         if self.mode == 'NN' or self.mode == 'autograd':
             b_op_val = self.model(bnd)[:, var].reshape(-1, 1)
@@ -462,19 +465,8 @@ class Bounds():
 
         if self.mode == 'NN':
             b_op_val = self._apply_bconds_set(bop)
-        # elif self.mode == 'autograd':
-        #     # Если кеш передали — используем его, чтобы внутри apply_operator не было повторных model(bnd)
-        #     # делаем локальный points для boundary, чтобы autograd.grad работал
-        #     points = bnd.detach().requires_grad_(True)
-        #     # можно заранее посчитать u_cache одним forward, чтобы не было лишнего
-        #     u_cache = self.model(points)
-        #     # привязать контекст кеша производных к этим boundary points
-        #     self.operator.derivative_obj.set_context(points, u_cache=u_cache, create_graph=self.operator.create_graph)
-
-        #     b_op_val = self.operator.apply_operator(bop, bnd)
 
         elif self.mode in ('autograd'):
-            # points = bnd.detach().clone().requires_grad_(True)
             points = bnd.detach().requires_grad_(True)
             u_cache = self.model(points)
             self.operator.derivative_obj.set_context(points, u_cache=u_cache, create_graph=self.operator.create_graph)
@@ -516,7 +508,8 @@ class Bounds():
                     b_op_val -= self._apply_neumann(bnd[i], bop).reshape(-1, 1)
         return b_op_val
 
-    def _apply_robin(self, bnd: torch.Tensor, bop: Union[list, dict], var: int) -> torch.Tensor:
+    def _apply_robin(self, bnd: torch.Tensor, bop: Union[list, dict], var: int,
+                     u_cache: torch.Tensor = None, sl: slice = None) -> torch.Tensor:
         """ Applies Robin boundary conditions.
 
         Args:
@@ -531,7 +524,7 @@ class Bounds():
 
         alpha, *betas = [bop[list(bop.keys())[i]]['coeff'] for i in range(len(bop))]
 
-        value_term = alpha * self._apply_dirichlet(bnd, var)
+        value_term = alpha * self._apply_dirichlet(bnd, var, u_cache=u_cache, sl=sl)
 
         derivative_term = 0
         for beta in betas:
@@ -549,7 +542,9 @@ class Bounds():
         b_op_val = value_term + derivative_term
         return b_op_val
 
-    def _apply_data(self, bnd: torch.Tensor, bop: list, var: int) -> torch.Tensor:
+    def _apply_data(self, bnd: torch.Tensor, bop: list, var: int,
+                    u_cache: torch.Tensor = None, 
+                    sl: slice = None) -> torch.Tensor:
         """ Method for applying known data about solution.
 
         Args:
@@ -562,12 +557,12 @@ class Bounds():
             torch.Tensor: calculated data condition.
         """
         if bop is None:
-            b_op_val = self._apply_dirichlet(bnd, var).reshape(-1, 1)
+            b_op_val = self._apply_dirichlet(bnd, var, u_cache=u_cache, sl=sl).reshape(-1, 1)
         else:
             b_op_val = self._apply_neumann(bnd, bop).reshape(-1, 1)
         return b_op_val
 
-    def b_op_val_calc(self, bcond: dict, u_cache: torch.Tensor = None) -> torch.Tensor:
+    def b_op_val_calc(self, bcond: dict, u_cache: torch.Tensor = None, sl: slice = None,) -> torch.Tensor:
         """ Auxiliary function. Serves only to choose *type* of the condition and evaluate one.
 
         Args:
@@ -581,15 +576,16 @@ class Bounds():
         b_op_val = None
 
         if bcond['type'] == 'dirichlet':
-            b_op_val = self._apply_dirichlet(bcond['bnd'], bcond['var'])
+            b_op_val = self._apply_dirichlet(bcond["bnd"], bcond["var"], u_cache=u_cache, sl=sl)
         elif bcond['type'] == 'operator':
-            b_op_val = self._apply_neumann(bcond['bnd'], bcond['bop'])
+            b_op_val = self._apply_neumann(bcond["bnd"], bcond["bop"])
         elif bcond['type'] == 'periodic':
-            b_op_val = self._apply_periodic(bcond['bnd'], bcond['bop'], bcond['var'])
+            b_op_val = self._apply_periodic(bcond["bnd"], bcond["bop"], bcond["var"])
         elif bcond['type'] == 'robin':
-            b_op_val = self._apply_robin(bcond['bnd'], bcond['bop'], bcond['var'])
+            b_op_val = self._apply_robin(bcond["bnd"], bcond["bop"], bcond["var"], u_cache=u_cache, sl=sl)
         elif bcond['type'] == 'data':
-            b_op_val = self._apply_data(bcond['bnd'], bcond['bop'], bcond['var'])
+            b_op_val = self._apply_data(bcond["bnd"], bcond["bop"], bcond["var"],
+                                u_cache=u_cache, sl=sl)
         return b_op_val
 
     def apply_bcs(self) -> Tuple[torch.Tensor, torch.Tensor, list, list]:
@@ -607,44 +603,54 @@ class Bounds():
             keys (list): boundary types list corresponding matrix_bval columns.
             bval_length (list): list of length of each boundary type column.
         """
-
         bval_lists = defaultdict(list)
         true_lists = defaultdict(list)
 
-        # p = next(self.model.parameters())
-        # z = (p.sum() * 0.0)  # scalar with grad_fn
+        # ---------- value-batch (NN/autograd): dirichlet + robin(value) + data(bop None) ----------
+        u_cache = None
+        points_val = None
+        sl_map = {}  # bc_index -> slice in u_cache
 
-        # bval = z.reshape(1, 1)
-        # true_bval = z.reshape(1, 1)
-
-        # keys = ["stub"]
-        # bval_length = [1]
-        # return bval, true_bval, keys, bval_length
-        # ---------- Dirichlet batch (NN/autograd only) ----------
-        
-        dir_indices = []
         if self.mode in ("NN", "autograd"):
-            dir_indices = [i for i, bc in enumerate(self.prepared_bconds) if bc["type"] == "dirichlet"]
+            val_indices = []
+            for i, bc in enumerate(self.prepared_bconds):
+                btype = bc["type"]
 
-        if dir_indices:
-            bnds = [self.prepared_bconds[i]["bnd"] for i in dir_indices]
-            lens = [b.shape[0] for b in bnds]
+                if btype == "periodic":
+                    continue  # periodic отдельно
 
-            B = torch.cat(bnds, dim=0)
-            U = self.model(B)
+                if btype == "dirichlet":
+                    val_indices.append(i)
+                elif btype == "robin":
+                    val_indices.append(i)  # alpha*u точно нужен
+                elif btype == "data" and not bc.get("bop", None):
+                    val_indices.append(i)
 
-            offset = 0
-            for i, n in zip(dir_indices, lens):
-                bc = self.prepared_bconds[i]
-                var = bc["var"]
+            if val_indices:
+                bnds = [self.prepared_bconds[i]["bnd"] for i in val_indices]
+                lens = [b.shape[0] for b in bnds]
 
-                pred = U[offset:offset + n, var].reshape(-1)
-                true = bc["bval"].reshape(-1)
+                points_val = torch.cat(bnds, dim=0)      # без requires_grad
+                u_cache = self.model(points_val)         # один forward для всех value-only
 
-                bval_lists["dirichlet"].append(pred)
-                true_lists["dirichlet"].append(true)
+                off = 0
+                for i, n in zip(val_indices, lens):
+                    sl_map[i] = slice(off, off + n)
+                    off += n
 
-                offset += n
+                # dirichlet можно как раньше сразу заполнить в bval_lists, чтобы сохранить структуру
+                for i in val_indices:
+                    bc = self.prepared_bconds[i]
+                    if bc["type"] != "dirichlet":
+                        continue
+                    sl = sl_map[i]
+                    var = bc["var"]
+
+                    pred = u_cache[sl, var].reshape(-1)
+                    true = bc["bval"].reshape(-1)
+
+                    bval_lists["dirichlet"].append(pred)
+                    true_lists["dirichlet"].append(true)
 
         # ---------- Other BCs (operator/neumann/data/etc.) ----------
         for i, bc in enumerate(self.prepared_bconds):
@@ -654,7 +660,12 @@ class Bounds():
             if btype == "dirichlet" and self.mode in ("NN", "autograd"):
                 continue
 
-            pred = self.b_op_val_calc(bc).reshape(-1)
+            if u_cache is not None and i in sl_map:
+                sl = sl_map[i]
+                pred = self.b_op_val_calc(bc, u_cache=u_cache, sl=sl).reshape(-1)
+            else:
+                pred = self.b_op_val_calc(bc).reshape(-1)
+
             true = bc["bval"].reshape(-1)
 
             bval_lists[btype].append(pred)
@@ -666,3 +677,4 @@ class Bounds():
 
         bval, true_bval, keys, bval_length = dict_to_matrix(bval_dict, true_bval_dict)
         return bval, true_bval, keys, bval_length
+

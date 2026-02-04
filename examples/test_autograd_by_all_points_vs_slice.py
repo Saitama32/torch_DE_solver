@@ -68,11 +68,11 @@ def main():
     net = make_net(neurons=neurons, device=device, dtype=dtype)
 
     # N_all = все boundary-точки (условно)
-    N_all = 400
+    N_all = 60000
     pts_all = make_points(N_all, device=device, dtype=dtype)
 
     # slice: например BC содержит 1/5 точек
-    n_slice = 100
+    n_slice = 10000
     pts_slice = pts_all[:n_slice]  # тот же “кусок” точек
 
     # --- BENCH: du/dt ---
