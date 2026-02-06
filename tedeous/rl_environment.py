@@ -118,7 +118,7 @@ class EnvRLOptimizer(gym.Env):
         self.plot_loss_surface = PlotLossSurface(**self.loss_surface_params)
         self.plot_loss_surface.counter = self.counter
 
-        self.raw_states_dict = self.plot_loss_surface.save_equation_loss_surface(*self.equation_params)
+        self.raw_states_dict = self.plot_loss_surface.save_equation_loss_surface(*self.equation_params, log_key=self.AE_train_params['log_key'])
 
         if len(self.reward_history) == 0:
             prev_reward = 0

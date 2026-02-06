@@ -3,7 +3,7 @@ from comet_ml.integration.pytorch import log_model
 
 experiment = start(
   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_poisson_2d_cg_farm_transitions",
+  project_name="rlpinn_poisson_2d_cg_opimization",
   workspace="saitama32"
 )
 
@@ -11,6 +11,7 @@ import torch
 import os
 import sys
 import time
+import argparse
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -38,7 +39,22 @@ k = 8
 A = 10
 
 
-def poisson_2d_irregular_geometry_experiment(grid_res):
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--log_key",
+        type=str,
+        default=None,
+        help="Comet experiment key for backup / resume"
+    )
+    return parser.parse_args()
+
+
+def poisson_2d_irregular_geometry_experiment(grid_res, log_key=None):
+    if log_key == "True":
+        log_key = True
+    elif log_key == "False":
+        log_key = False    
     exp_dict_list = []
 
     x_min, x_max = -1, 1
@@ -219,7 +235,8 @@ def poisson_2d_irregular_geometry_experiment(grid_res):
         "every_epoch": 100,
         "learning_rate": 5e-4,
         "resume": True,
-        "finetune_AE_model": False
+        "finetune_AE_model": False,
+        "log_key": log_key
     }
 
     loss_surface_params = {
@@ -268,6 +285,7 @@ def poisson_2d_irregular_geometry_experiment(grid_res):
         "reward_boundary_coeff": 1,
         "lr": 5e-4,
         "exp": experiment,
+        "log_key": log_key,
     }
 
     # backup_params = {
@@ -295,9 +313,10 @@ def poisson_2d_irregular_geometry_experiment(grid_res):
 
 
 if __name__ == "__main__":
+    args = parse_args()
     grid_res = 100
 
-    exp_dict_list = poisson_2d_irregular_geometry_experiment(grid_res)
+    exp_dict_list = poisson_2d_irregular_geometry_experiment(grid_res, log_key=args.log_key)
 
 
 
