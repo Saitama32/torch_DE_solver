@@ -17,10 +17,14 @@ warnings.filterwarnings("ignore", message="The frame.append method is deprecated
 from landscape_visualization._aux.AEmodel import UniformAutoencoder
 from landscape_visualization._aux.losses_of_plot import loss_grid_to_trajectory, rec_loss_function, loss_anchor
 from landscape_visualization._aux.trajectories_data import get_trajectory_dataloader, get_anchor_dataloader, \
-    get_predefined_values
+    get_predefined_values, get_trajectory_dataset
 from landscape_visualization._aux.utils import get_files, get_gridpoint_and_trajectory_datasets, \
     loss_well_spaced_trajectory, plot_losses
 
+from landscape_visualization._aux.fast_train_cuda_graph import make_train_cudagraph, make_gpu_batcher
+
+from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingWarmRestarts
+import time
 
 class VisualizationModel:
     """Class for preprocessing"""
@@ -89,11 +93,10 @@ class VisualizationModel:
         self.grid_step = grid_step
         self.d_max_latent = d_max_latent
         self.anchor_mode = anchor_mode
+        self.best_AE_model = None
 
-        if device:
-            self.device = device
-        else:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(device) if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
         if self.path_to_plot_model is None:
             self.path_to_plot_model_directory = None
@@ -139,9 +142,9 @@ class VisualizationModel:
             rec_data_loader, transform = get_trajectory_dataloader(batch_size, pt_files=pt_files, device=self.device)
 
         else:
-            solver_models_state_dicts = [solver_model.state_dict() for solver_model in solver_models]
+            # solver_models_state_dicts = [solver_model.state_dict() for solver_model in solver_models]
             rec_data_loader, transform = get_trajectory_dataloader(
-                batch_size, models=solver_models_state_dicts, device=self.device
+                batch_size, models=solver_models, device=self.device
             )
 
         self.loss_dict['rec']['dataloader'] = rec_data_loader
@@ -191,7 +194,11 @@ class VisualizationModel:
               resume: bool,
               finetune_AE_model: bool = False,
               callbacks: Union[List, None] = None,
-              solver_models: List[torch.nn.Module] = None):
+              solver_models: List[torch.nn.Module] = None,
+              use_fast_loop: bool = False,
+              amp: str = "off",
+              compile: bool = False,
+              max_batches: int = None):
 
         """Train model.
 
@@ -204,9 +211,128 @@ class VisualizationModel:
         callbacks (Union[List, None], optional): A list of callback objects used to manage the training process. Defaults to None.
         """
 
+        fast_ok = (
+            use_fast_loop
+            and self.device.type == "cuda"
+            and self.isEnabled("rec")
+            and solver_models
+            and not self.isEnabled("anchor")
+            and not self.isEnabled("lastzero")
+            and not self.isEnabled("polars")
+            and not self.isEnabled("gridscaling")
+            and not self.isEnabled("wellspacedtrajectory")
+        )
+
+        if fast_ok:
+            print("Using fast training loop with CUDA Graphs and AMP.")
+
+            # solver_models_state_dicts = [solver_model.state_dict() for solver_model in solver_models]
+
+            # dataset, _ = get_trajectory_dataset(solver_models, normalize=True)
+            input_dim = self.get_files_and_compile_train_mode(batch_size, solver_models=solver_models)
+
+            dataset = self.loss_dict['rec']['dataloader'].dataset
+
+            X = torch.stack([dataset[i] for i in range(len(dataset))], dim=0).contiguous()
+            X = X.to(self.device, non_blocking=True)
+            B = min(batch_size, X.shape[0])
+
+            batcher = make_gpu_batcher(X, B)
+            D = X.shape[1]
+
+            input_dim =  D 
+
+            print('\nAutoencoder training')
+            print('Number of models considered: ', len(dataset))
+            print("Input_dim: ", input_dim)
+
+            if finetune_AE_model and self.AE_model is not None:
+                print("Fine-tune the existing autoencoder model.")
+            else:
+                print("Training of a new autoencoder model.\n")
+                self.AE_model = UniformAutoencoder(input_dim, self.num_of_layers, self.latent_dim, h=self.layers_AE).to(
+                    self.device)
+                
+            if compile and use_fast_loop:
+                self.AE_model = torch.compile(self.AE_model)
+
+
+            # 2) AMP режим
+            autocast_enabled = (amp != "off")
+            amp_dtype = (torch.float16 if amp == "fp16" else torch.bfloat16)  # рекомендую bf16
+
+            self.optimizer = optimizer.optimizer_choice(self.mode, self.AE_model)
+            scheduler = optimizer.scheduler
+
+            # 3) ВАЖНО: отдельный pytorch optimizer для cudagraph
+            # (не self.optimizer из TEDEouS)
+            # lr = float(optimizer.scheduler.get_last_lr()[0]) if hasattr(optimizer, "scheduler") else 5e-4
+            # fast_optim = torch.optim.AdamW(
+            #     self.AE_model.parameters(),
+            #     lr=lr,
+            #     weight_decay=0.0,
+            #     capturable=True,
+            #     fused=True,
+            # )
+
+            # optim = torch.optim.RMSprop(
+            #     self.AE_model.parameters(),
+            #     lr=5e-4,
+            #     weight_decay=0.0,
+            #     capturable=True,
+            #     # fused=(device.type == "cuda"),
+            # )
+            # scheduler = CosineAnnealingWarmRestarts(
+            #     optim,
+            #     1200,
+            # )
+
+            # 4) Захват CUDA Graph (rec-only)
+            train_step_cg = make_train_cudagraph(
+                model=self.AE_model,
+                optim=self.optimizer,
+                batch_shape=(B, D),
+                rec_weight=float(self.loss_dict["rec"]["weight"]),
+                dtype=X.dtype,
+                autocast_enabled=autocast_enabled,
+                amp_dtype=amp_dtype,
+            )
+
+            # 5) Цикл обучения (replay)
+            max_batches_eff = max_batches or max(1, len(X) // B)
+
+            callbacks = CallbackList(callbacks=callbacks, model=self)  # важно
+
+            callbacks.on_train_begin()
+            torch.cuda.synchronize()
+            t0 = time.perf_counter()
+            for self.epoch in range(epochs):
+                if callbacks.callbacks and callbacks.callbacks[0].stop_training:
+                    break
+                running = 0.0
+                for b in range(max_batches_eff):
+                    rec_batch = next(batcher)
+                    loss_tensor = train_step_cg(rec_batch)   # replay()
+                    if (b == max_batches_eff - 1):
+                        torch.cuda.synchronize()
+                        running += float(loss_tensor)   
+                              # лучше не делать .item() слишком часто
+                self.total_loss = running / max_batches_eff
+                if self.epoch % every_epoch == 0:
+                    # self.total_loss = loss_tensor.item()  # можно так, чтобы не синхронизировать GPU каждый раз
+                    callbacks.on_epoch_end()
+                    print(f"Epoch: {self.epoch}\tTotal: {self.total_loss:.4f}")
+
+            torch.cuda.synchronize()
+            t1 = time.perf_counter()
+            print(f"Training completed in {(t1 - t0):.2f} seconds.")
+
+            callbacks.on_train_end()
+
+            return self.AE_model
+        
         input_dim = self.get_files_and_compile_train_mode(batch_size, solver_models=solver_models)
 
-        best_AE_model = None
 
         if finetune_AE_model and self.AE_model is not None:
             print("Fine-tune the existing autoencoder model.")
@@ -214,6 +340,7 @@ class VisualizationModel:
             print("Training of a new autoencoder model.\n")
             self.AE_model = UniformAutoencoder(input_dim, self.num_of_layers, self.latent_dim, h=self.layers_AE).to(
                 self.device)
+            
 
         self.optimizer = optimizer.optimizer_choice(self.mode, self.AE_model)
 
@@ -227,9 +354,9 @@ class VisualizationModel:
         if self.path_to_plot_model:
             if os.path.exists(self.path_to_plot_model):
                 self.AE_model.load_state_dict(torch.load(self.path_to_plot_model, weights_only=True))
-                best_AE_model = self.AE_model
+                self.best_AE_model = self.AE_model
 
-        if (best_AE_model is not None) and (not resume):
+        if (self.best_AE_model is not None) and (not resume):
             raise "There is a model already. Use --resume to update it."
 
         callbacks.on_train_begin()
@@ -249,6 +376,8 @@ class VisualizationModel:
         columns.append('Total loss')
         columns.append('Learning rate')
         df_losses = pd.DataFrame(columns=columns)
+        torch.cuda.synchronize()
+        t0 = time.perf_counter()
         for self.epoch in range(epochs):
             if callbacks.callbacks[0].stop_training is False:
                 self.AE_model.train()
@@ -351,13 +480,14 @@ class VisualizationModel:
                 filtered_columns = ['epoch', 'Total loss']
                 for i in losses.keys():
                     filtered_columns = filtered_columns + [self.loss_dict[i]['official_name']]
-
+        
+        torch.cuda.synchronize()
+        t1 = time.perf_counter()
+        print(f"Training completed in {(t1 - t0):.2f} seconds.")
         if self.path_to_plot_model_directory:
             plot_losses(df_losses[filtered_columns], every_epoch, self.path_to_plot_model_directory)
 
         callbacks.on_train_end()
 
-        best_AE_model = copy.deepcopy(self.AE_model)
-
         if solver_models:
-            return best_AE_model
+            return self.AE_model

@@ -104,12 +104,13 @@ class EnvRLOptimizer(gym.Env):
         patience_scheduler = AE_params['patience_scheduler']
         cosine_scheduler_patience = AE_params['cosine_scheduler_patience']
 
-        optimizer = Optimizer('RMSprop', {'lr': learning_rate}, cosine_scheduler_patience=cosine_scheduler_patience)
+        optimizer = Optimizer('RMSprop', {'lr': learning_rate, 'capturable': True}, cosine_scheduler_patience=cosine_scheduler_patience)
         cb_es = EarlyStopping(patience=patience_scheduler)
 
         AEmodel = self.visualization_model.train(
             optimizer, epochs, every_epoch, batch_size, resume,
-            callbacks=[cb_es], solver_models=self.solver_models, finetune_AE_model=finetune_AE_model
+            callbacks=[cb_es], solver_models=self.solver_models, finetune_AE_model=finetune_AE_model, use_fast_loop = False,
+              compile = True
         )
 
         self.loss_surface_params['solver_models'] = self.solver_models

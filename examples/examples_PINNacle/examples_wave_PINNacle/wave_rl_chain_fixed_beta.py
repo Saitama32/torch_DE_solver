@@ -114,7 +114,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
 
     equation.add(wave_eq)
 
-    neurons = 200
+    neurons = 100
     pde_dim_in = 2
     pde_dim_out = 1
 
@@ -161,7 +161,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
                                          no_improvement_patience=1000,
                                          patience=5,
                                          randomize_parameter=1e-6,
-                                         info_string_every=1)
+                                         info_string_every=100)
 
 
     optimizer = {
@@ -223,7 +223,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
             "cosine_scheduler_patience": 1200,
         },
         "batch_size": 32,
-        "every_epoch": 100,
+        "every_epoch": 1000,
         "learning_rate": 5e-4,
         "resume": True,
         "finetune_AE_model": False
@@ -258,7 +258,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
     }
 
     rl_agent_params = {
-        "n_save_models": 10,
+        "n_save_models": 60,
         "n_trajectories": 1000,
         "tolerance": 0.814, 
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
@@ -300,8 +300,8 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
 
 
 if __name__ == "__main__":
-    x_res = 257
-    t_res = 101
+    x_res = 30
+    t_res = 30
     beta = 5
 
     exp_dict_list = wave_1d_basic_experiment(x_res, t_res, beta)
