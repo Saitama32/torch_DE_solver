@@ -295,6 +295,6 @@ def heat_2d_long_time_experiment(grid_res):
     return exp_dict_list
 
 if __name__ == "__main__":
-    grid_res = 50
+    grid_res = 20
 
     exp_dict_list = heat_2d_long_time_experiment(grid_res)
