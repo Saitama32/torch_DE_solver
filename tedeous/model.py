@@ -429,7 +429,7 @@ class Model():
             variable_dict = self.domain.variable_dict
             bconds = self.conditions.build(variable_dict)
 
-            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=1, tolerance = rl_agent_params["tolerance"],prev_tol= rl_agent_params["prev_tol"], use_log_state=rl_agent_params["log_key"])
+            rl_agent.replay_buffer = collect_all_comet_transitions(rl_agent.replay_buffer, max_exps_last=200, tolerance = rl_agent_params["tolerance"],prev_tol= rl_agent_params["prev_tol"], use_log_state=rl_agent_params["log_key"])
             if backup_params is not None:
                 optim_state, params_state = load_rl_agent_from_comet(backup_params["experiment_key"], map_location=device_type())
                 rl_agent.model_optim.load_state_dict(optim_state)
