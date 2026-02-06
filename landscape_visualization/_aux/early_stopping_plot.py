@@ -4,6 +4,7 @@ import os
 import numpy as np
 import torch
 from tedeous.callbacks.callback import Callback
+import copy
 
 
 def create_directory_if_not_exists(file_path):
@@ -40,6 +41,7 @@ class EarlyStopping(Callback):
         self.min_delta *= -1
 
         self.stop_training = False
+        self.best_model = None
 
     def on_train_begin(self, logs=None):
         # Allow instances to be re-used
@@ -54,7 +56,7 @@ class EarlyStopping(Callback):
             self.best = current
             self.wait = 0
             self.best_epoch = self.model.epoch
-            self.best_model = self.model.AE_model
+            self.best_model = copy.deepcopy(self.model.AE_model)
             if self.model.path_to_plot_model is not None:
                 create_directory_if_not_exists(self.model.path_to_plot_model)
                 torch.save(self.best_model.state_dict(), self.model.path_to_plot_model)
@@ -68,7 +70,10 @@ class EarlyStopping(Callback):
         if self.stopped_epoch > 0:
             print("Epoch {}: early stopping".format(self.stopped_epoch))
         print("best model captured at epoch {} with loss={:.4f}".format(self.best_epoch, self.best))
-        if self.model.path_to_plot_model is not None:
-            create_directory_if_not_exists(self.model.path_to_plot_model)
-            torch.save(self.model.AE_model.state_dict(), self.model.path_to_plot_model)
+        if self.best_model is not None and self.model.path_to_plot_model is not None:
+            torch.save(self.best_model.state_dict(), self.model.path_to_plot_model)
+        if self.best_model is not None:
+            self.model.AE_model = self.best_model
+                
         return self.model.AE_model
+
