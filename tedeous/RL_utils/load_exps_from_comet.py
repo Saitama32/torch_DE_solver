@@ -8,7 +8,7 @@ from tedeous.RL_utils.load_transitions_into_buffer_pickle import load_transition
 
 # === Настройки ===
 WORKSPACE = "saitama32"
-PROJECT_NAME = "rlpinn-ks-tolerance"
+PROJECT_NAME = "rlpinn-ks-farm-transitions"  # укажи свой проект
 # MAX_EXPERIMENTS = 15  # можно изменить при необходимости
 
 api = API(api_key="aP71fQTYPNqfsYWvudPPmoBl5")  # или просто API()

@@ -3,7 +3,7 @@ from comet_ml.integration.pytorch import log_model
 
 experiment = start(
   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_KS_farm_transitions",   
+  project_name="rlpinn_KS_optimization",   
   workspace="saitama32"
 )
 import torch
