@@ -196,7 +196,6 @@ class VisualizationModel:
               callbacks: Union[List, None] = None,
               solver_models: List[torch.nn.Module] = None,
               use_fast_loop: bool = False,
-              amp: str = "off",
               compile: bool = False,
               max_batches: int = None):
 
@@ -221,26 +220,16 @@ class VisualizationModel:
             and not self.isEnabled("polars")
             and not self.isEnabled("gridscaling")
             and not self.isEnabled("wellspacedtrajectory")
-        )
-
+        )            
         if fast_ok:
-            print("Using fast training loop with CUDA Graphs and AMP.")
-
-            # solver_models_state_dicts = [solver_model.state_dict() for solver_model in solver_models]
-
-            # dataset, _ = get_trajectory_dataset(solver_models, normalize=True)
-            input_dim = self.get_files_and_compile_train_mode(batch_size, solver_models=solver_models)
-
-            dataset = self.loss_dict['rec']['dataloader'].dataset
+            print("Using fast training loop with CUDA Graphs.")
+            dataset, _ = get_trajectory_dataset(solver_models, normalize=True)
 
             X = torch.stack([dataset[i] for i in range(len(dataset))], dim=0).contiguous()
             X = X.to(self.device, non_blocking=True)
             B = min(batch_size, X.shape[0])
 
-            batcher = make_gpu_batcher(X, B)
-            D = X.shape[1]
-
-            input_dim =  D 
+            input_dim = X.shape[1]
 
             print('\nAutoencoder training')
             print('Number of models considered: ', len(dataset))
@@ -256,80 +245,49 @@ class VisualizationModel:
             if compile and use_fast_loop:
                 self.AE_model = torch.compile(self.AE_model)
 
-
-            # 2) AMP режим
-            autocast_enabled = (amp != "off")
-            amp_dtype = (torch.float16 if amp == "fp16" else torch.bfloat16)  # рекомендую bf16
-
             self.optimizer = optimizer.optimizer_choice(self.mode, self.AE_model)
             scheduler = optimizer.scheduler
 
-            # 3) ВАЖНО: отдельный pytorch optimizer для cudagraph
-            # (не self.optimizer из TEDEouS)
-            # lr = float(optimizer.scheduler.get_last_lr()[0]) if hasattr(optimizer, "scheduler") else 5e-4
-            # fast_optim = torch.optim.AdamW(
-            #     self.AE_model.parameters(),
-            #     lr=lr,
-            #     weight_decay=0.0,
-            #     capturable=True,
-            #     fused=True,
-            # )
-
-            # optim = torch.optim.RMSprop(
-            #     self.AE_model.parameters(),
-            #     lr=5e-4,
-            #     weight_decay=0.0,
-            #     capturable=True,
-            #     # fused=(device.type == "cuda"),
-            # )
-            # scheduler = CosineAnnealingWarmRestarts(
-            #     optim,
-            #     1200,
-            # )
-
-            # 4) Захват CUDA Graph (rec-only)
-            train_step_cg = make_train_cudagraph(
-                model=self.AE_model,
-                optim=self.optimizer,
-                batch_shape=(B, D),
-                rec_weight=float(self.loss_dict["rec"]["weight"]),
-                dtype=X.dtype,
-                autocast_enabled=autocast_enabled,
-                amp_dtype=amp_dtype,
-            )
-
-            # 5) Цикл обучения (replay)
-            max_batches_eff = max_batches or max(1, len(X) // B)
-
-            callbacks = CallbackList(callbacks=callbacks, model=self)  # важно
-
+            callbacks = CallbackList(callbacks=callbacks, model=self)
             callbacks.on_train_begin()
-            torch.cuda.synchronize()
+
+            rec_weight = float(self.loss_dict["rec"]["weight"])
+            train_step = make_train_cudagraph(self.AE_model, self.optimizer, (B, input_dim), rec_weight)
+
+            if self.device.type == "cuda":
+                torch.cuda.synchronize()
             t0 = time.perf_counter()
+
             for self.epoch in range(epochs):
+                # как в медленной ветке: stop_training проверяется через callbacks
                 if callbacks.callbacks and callbacks.callbacks[0].stop_training:
                     break
-                running = 0.0
-                for b in range(max_batches_eff):
-                    rec_batch = next(batcher)
-                    loss_tensor = train_step_cg(rec_batch)   # replay()
-                    if (b == max_batches_eff - 1):
-                        torch.cuda.synchronize()
-                        running += float(loss_tensor)   
-                              # лучше не делать .item() слишком часто
-                self.total_loss = running / max_batches_eff
+
+                # self.AE_model.train()
+                total_loss = 0.0
+
+                self.optimizer.zero_grad(set_to_none=False)
+                lr = scheduler.get_last_lr()[0]
+                loss_tensor = train_step(X, lr)
+                if scheduler is not None:
+                    scheduler.step()
+
+                total_loss += float(loss_tensor.detach())
+                self.total_loss = total_loss
                 if self.epoch % every_epoch == 0:
-                    # self.total_loss = loss_tensor.item()  # можно так, чтобы не синхронизировать GPU каждый раз
                     callbacks.on_epoch_end()
                     print(f"Epoch: {self.epoch}\tTotal: {self.total_loss:.4f}")
 
-            torch.cuda.synchronize()
+            if self.device.type == "cuda":
+                torch.cuda.synchronize()
             t1 = time.perf_counter()
             print(f"Training completed in {(t1 - t0):.2f} seconds.")
 
             callbacks.on_train_end()
 
-            return self.AE_model
+            if solver_models:
+                return self.AE_model
+
         
         input_dim = self.get_files_and_compile_train_mode(batch_size, solver_models=solver_models)
 
@@ -448,6 +406,7 @@ class VisualizationModel:
                     loss_total_batch.backward()
                     self.optimizer.step()
                     scheduler.step(self.epoch + batch_idx / max_batches)
+                    # scheduler.step()
             else:
                 break
 

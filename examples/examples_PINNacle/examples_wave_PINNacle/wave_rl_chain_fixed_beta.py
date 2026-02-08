@@ -226,7 +226,9 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         "every_epoch": 1000,
         "learning_rate": 5e-4,
         "resume": True,
-        "finetune_AE_model": False
+        "finetune_AE_model": False,
+        "use_fast_loop": True,
+        "compile": True
     }
 
     loss_surface_params = {
@@ -258,7 +260,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
     }
 
     rl_agent_params = {
-        "n_save_models": 60,
+        "n_save_models": 10,
         "n_trajectories": 1000,
         "tolerance": 0.814, 
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
