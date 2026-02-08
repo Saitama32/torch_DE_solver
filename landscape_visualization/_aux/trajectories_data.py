@@ -1,6 +1,7 @@
 # This code is partially based on the repository source: https://github.com/elhamod/NeuroVisualizer.git.
 from torch.utils.data import DataLoader, Dataset
 from collections import OrderedDict
+from pathlib import Path
 
 import torch
 import builtins
@@ -9,33 +10,47 @@ import numpy as np
 torch.serialization.add_safe_globals(
     [torch.nn.Sequential, torch.nn.modules.linear.Linear, torch.nn.modules.activation.Tanh, builtins.set])
 
+def to_state_dict(x):
+    # Case 1: already a state_dict-like OrderedDict
+    if isinstance(x, OrderedDict):
+        return x
+
+    # Case 2: a live model / module
+    if isinstance(x, torch.nn.Module):
+        return x.state_dict()
+
+    # Case 3: path-like -> load
+    if isinstance(x, (str, bytes, Path)):
+        obj = torch.load(x, map_location="cpu", weights_only=True)
+
+        # weights_only=True should usually return a state_dict,
+        # but be defensive in case it returns a module-like object.
+        if isinstance(obj, OrderedDict):
+            return obj
+        if isinstance(obj, dict) and all(isinstance(k, str) for k in obj.keys()):
+            return obj
+        if isinstance(obj, torch.nn.Module):
+            return obj.state_dict()
+        if hasattr(obj, "state_dict"):
+            return obj.state_dict()
+
+        raise TypeError(f"Loaded object from {x} is not a state_dict/module. Got: {type(obj)}")
+
+    raise TypeError(f"Unsupported trajectory element type: {type(x)}")
+
 
 def calculate_mean_std(saved_trajectories):
-    if isinstance(saved_trajectories[0], OrderedDict):
-        state_dicts = saved_trajectories
-        isSpecialCase = not isinstance(state_dicts[0], dict) if state_dicts else False
-    else:
-        state_dicts = [torch.load(file_path, map_location=torch.device('cpu'), weights_only=True) for file_path in
-                       saved_trajectories]
-        isSpecialCase = not isinstance(state_dicts[0], dict)
-
-    keys = list(state_dicts[0].state_dict().keys() if isSpecialCase else state_dicts[0].keys())
+    state_dicts = [to_state_dict(item) for item in saved_trajectories]
+    keys = list(state_dicts[0].keys())
 
     mean_values, std_values = [], []
 
     for key in keys:
-        if isSpecialCase:
-            values = [state_dict.state_dict()[key].float().view(1, -1) for state_dict in state_dicts]
-        else:
-            values = [state_dict[key].float().view(1, -1) for state_dict in state_dicts]
+        values = [sd[key].float().view(1, -1) for sd in state_dicts]
+        values_st = torch.stack(values)  # [N, 1, P]
 
-        values_st = torch.stack(values)
-
-        mean = torch.mean(values_st, dim=0)
-        std = torch.std(values_st, dim=0)
-
-        mean_values.append(mean)
-        std_values.append(std)
+        mean_values.append(torch.mean(values_st, dim=0))
+        std_values.append(torch.std(values_st, dim=0))
 
     mean_flattened_vector = torch.cat(mean_values, dim=1).view(-1)
     std_flattened_vector = torch.cat(std_values, dim=1).view(-1)
@@ -62,26 +77,15 @@ class ModelParamsDataset(Dataset):
         return len(self.saved_trajectories)
 
     def __getitem__(self, idx):
-        if isinstance(self.saved_trajectories[0], OrderedDict):
-            model_dict = self.saved_trajectories[idx]
-            params = [value.float().view(-1) for value in model_dict.values()]
-        else:
-            file_path = self.saved_trajectories[idx]
-            model_dict = torch.load(file_path, map_location=torch.device('cpu'), weights_only=True)
-            isSpecialCase = not hasattr(model_dict, 'keys')
-            if isSpecialCase:
-                model_dict = model_dict.state_dict()
-            params = []
-            for param_tensor in model_dict:
-                params.append(model_dict[param_tensor].flatten())
+        model_dict = to_state_dict(self.saved_trajectories[idx])
 
+        params = [tensor.float().view(-1) for tensor in model_dict.values()]
         data = torch.cat(params)
 
         if self.transform:
             data = self.transform(data)
 
         return data
-
 
 def get_trajectory_dataset(saved_trajectories, normalize=True):
     mean, std = calculate_mean_std(saved_trajectories)
