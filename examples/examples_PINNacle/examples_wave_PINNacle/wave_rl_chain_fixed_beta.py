@@ -223,7 +223,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
             "cosine_scheduler_patience": 1200,
         },
         "batch_size": 32,
-        "every_epoch": 1000,
+        "every_epoch": 100,
         "learning_rate": torch.tensor(5e-4, device="cuda"),
         "resume": True,
         "finetune_AE_model": False,
