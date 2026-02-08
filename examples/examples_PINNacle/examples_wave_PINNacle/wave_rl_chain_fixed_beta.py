@@ -224,7 +224,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         },
         "batch_size": 32,
         "every_epoch": 1000,
-        "learning_rate": 5e-4,
+        "learning_rate": torch.tensor(5e-4, device="cuda"),
         "resume": True,
         "finetune_AE_model": False,
         "use_fast_loop": True,
