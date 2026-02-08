@@ -109,8 +109,8 @@ class EnvRLOptimizer(gym.Env):
 
         AEmodel = self.visualization_model.train(
             optimizer, epochs, every_epoch, batch_size, resume,
-            callbacks=[cb_es], solver_models=self.solver_models, finetune_AE_model=finetune_AE_model, use_fast_loop = AE_train_params["use_fast_loop"],
-            compile = AE_train_params["compile"]
+            callbacks=[cb_es], solver_models=self.solver_models, finetune_AE_model=finetune_AE_model, use_fast_loop = self.AE_train_params["use_fast_loop"],
+            compile = self.AE_train_params["compile"]
         )
 
         self.loss_surface_params['solver_models'] = self.solver_models
