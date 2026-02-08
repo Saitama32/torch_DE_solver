@@ -228,7 +228,7 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         "resume": True,
         "finetune_AE_model": False,
         "use_fast_loop": True,
-        "compile": True
+        "compile": False
     }
 
     loss_surface_params = {
@@ -302,8 +302,8 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
 
 
 if __name__ == "__main__":
-    x_res = 30
-    t_res = 30
+    x_res = 10
+    t_res = 10
     beta = 5
 
     exp_dict_list = wave_1d_basic_experiment(x_res, t_res, beta)
