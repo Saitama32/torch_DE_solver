@@ -3,7 +3,7 @@ from comet_ml.integration.pytorch import log_model
 
 experiment = start(
   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_poisson_2d_classic_comparison",
+  project_name="rlpinn_poisson_2d_cg_comparison",
   workspace="saitama32"
 )
 
@@ -35,13 +35,24 @@ experiment.log_parameters({
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 solver_device(device)
+datapath = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../PINNacle_data/poisson_boltzmann2d.npy"))
 
-data_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../PINNacle_data/poisson1_cg_data.npy"))
-def poisson_2d_classic_experiment(grid_res):
+mu_1 = 1
+mu_2 = 4
+k = 8
+A = 10
+
+
+
+def poisson_2d_irregular_geometry_experiment(grid_res, log_key=None):
+    if log_key == "True":
+        log_key = True
+    elif log_key == "False":
+        log_key = False    
     exp_dict_list = []
 
-    x_min, x_max = -0.5, 0.5
-    y_min, y_max = -0.5, 0.5
+    x_min, x_max = -1, 1
+    y_min, y_max = -1, 1
 
     pde_dim_in = 2
     pde_dim_out = 1
@@ -61,27 +72,33 @@ def poisson_2d_classic_experiment(grid_res):
     # Circle type of removed domains ###################################################################################
 
     removed_domains_lst = [
-        {'circle': {'center': (0.3, 0.3), 'radius': 0.1}},
-        {'circle': {'center': (-0.3, 0.3), 'radius': 0.1}},
-        {'circle': {'center': (0.3, -0.3), 'radius': 0.1}},
-        {'circle': {'center': (-0.3, -0.3), 'radius': 0.1}}
+        {'circle': {'center': (0.5, 0.5), 'radius': 0.2}},
+        {'circle': {'center': (0.4, -0.4), 'radius': 0.4}},
+        {'circle': {'center': (-0.2, -0.7), 'radius': 0.1}},
+        {'circle': {'center': (-0.6, 0.5), 'radius': 0.3}}
     ]
 
     # Boundary conditions ##############################################################################################
 
     # CSG boundaries
 
-    boundaries.dirichlet({'circle': {'center': (0.3, 0.3), 'radius': 0.1}}, value=0)
-    boundaries.dirichlet({'circle': {'center': (-0.3, 0.3), 'radius': 0.1}}, value=0)
-    boundaries.dirichlet({'circle': {'center': (0.3, -0.3), 'radius': 0.1}}, value=0)
-    boundaries.dirichlet({'circle': {'center': (-0.3, -0.3), 'radius': 0.1}}, value=0)
+    boundaries.dirichlet({'circle': {'center': (0.5, 0.5), 'radius': 0.2}}, value=1)
+    boundaries.dirichlet({'circle': {'center': (0.4, -0.4), 'radius': 0.4}}, value=1)
+    boundaries.dirichlet({'circle': {'center': (-0.2, -0.7), 'radius': 0.1}}, value=1)
+    boundaries.dirichlet({'circle': {'center': (-0.6, 0.5), 'radius': 0.3}}, value=1)
 
     # Non CSG boundaries
 
-    boundaries.dirichlet({'x': x_min, 'y': [y_min, y_max]}, value=1)
-    boundaries.dirichlet({'x': x_max, 'y': [y_min, y_max]}, value=1)
-    boundaries.dirichlet({'x': [x_min, x_max], 'y': y_min}, value=1)
-    boundaries.dirichlet({'x': [x_min, x_max], 'y': y_max}, value=1)
+    boundaries.dirichlet({'x': x_min, 'y': [y_min, y_max]}, value=0.2)
+    boundaries.dirichlet({'x': x_max, 'y': [y_min, y_max]}, value=0.2)
+    boundaries.dirichlet({'x': [x_min, x_max], 'y': y_min}, value=0.2)
+    boundaries.dirichlet({'x': [x_min, x_max], 'y': y_max}, value=0.2)
+
+    def forcing_term(grid):
+        x, y = grid[:, 0], grid[:, 1]
+        return -A * (mu_1 ** 2 + mu_2 ** 2 + x ** 2 + y ** 2) * \
+               torch.sin(mu_1 * torch.pi * x) * \
+               torch.sin(mu_2 * torch.pi * y)
 
     equation = Equation()
 
@@ -100,7 +117,18 @@ def poisson_2d_classic_experiment(grid_res):
                 'coeff': -1.,
                 'term': [1, 1],
                 'pow': 1,
-                'var': 0
+            },
+        'k ** 2 * u':
+            {
+                'coeff': k ** 2,
+                'term': [None],
+                'pow': 1
+            },
+        'f(x, y)':
+            {
+                'coeff': forcing_term,
+                'term': [None],
+                'pow': 0
             }
     }
 
@@ -135,12 +163,11 @@ def poisson_2d_classic_experiment(grid_res):
 
     model.compile('autograd', lambda_operator=1, lambda_bound=100, removed_domains=removed_domains_lst)
 
-    u_exact_test = exact_solution_data(grid, data_file, pde_dim_in, pde_dim_out).reshape(-1)
+    img_dir = os.path.join(os.path.dirname(__file__), 'poisson_2d_irregular_geometry_img')
+
+    u_exact_test = exact_solution_data(grid, datapath, pde_dim_in, pde_dim_out).reshape(-1)
     
     equation_params = [u_exact_test, grid_test, grid, domain, equation, boundaries, model_layers]
-
-    img_dir = os.path.join(os.path.dirname(__file__), 'poisson_2d_classic_img')
-
 
     cb_es = early_stopping.EarlyStopping(eps=1e-6,
                                          loss_window=100,
@@ -167,7 +194,7 @@ def poisson_2d_classic_experiment(grid_res):
 
     net = model.net.to(device)
     grid_test = grid_test.to(device)
-    u_exact = exact_solution_data(grid, data_file, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape(-1, 1)
+    u_exact = exact_solution_data(grid, datapath, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape(-1, 1)
     u_pred = net(grid)
     diff = u_exact - u_pred
     error_op_mse_train = torch.mean(diff ** 2)
@@ -188,12 +215,12 @@ def poisson_2d_classic_experiment(grid_res):
                 for bnd in (bnd_left, bnd_right):
                     bnd = bnd.to(device)
                     u_pred = net(bnd)
-                    u_ex = exact_solution_data(bnd, data_file, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape_as(u_pred)
+                    u_ex = exact_solution_data(bnd, datapath, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape_as(u_pred)
                     boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
             else:
                 bnd = b["bnd"].to(device)
                 u_pred = net(bnd)
-                u_ex = exact_solution_data(bnd, data_file, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape_as(u_pred)
+                u_ex = exact_solution_data(bnd, datapath, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape_as(u_pred)
                 boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
 
     error_bnd_mse_train = torch.mean(torch.cat(boundary_err_sq))
@@ -210,7 +237,7 @@ def poisson_2d_classic_experiment(grid_res):
     # Test errors
     variable_dict = domain_test.variable_dict
     bconds = boundaries.build(variable_dict)
-    u_exact_test = exact_solution_data(grid_test, data_file, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape(-1, 1)
+    u_exact_test = exact_solution_data(grid_test, datapath, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape(-1, 1)
     error_op_mse_test = torch.mean((u_exact_test - net(grid_test)) ** 2)
     error_op_rmse_test = torch.sqrt(torch.mean((u_exact_test - net(grid_test)) ** 2))
     boundary_err_sq = []
@@ -227,12 +254,12 @@ def poisson_2d_classic_experiment(grid_res):
                 for bnd in (bnd_left, bnd_right):
                     bnd = bnd.to(device)
                     u_pred = net(bnd)
-                    u_ex = exact_solution_data(bnd, data_file, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape_as(u_pred)
+                    u_ex = exact_solution_data(bnd, datapath, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape_as(u_pred)
                     boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
             else:
                 bnd = b["bnd"].to(device)
                 u_pred = net(bnd)
-                u_ex = exact_solution_data(bnd, data_file, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape_as(u_pred)
+                u_ex = exact_solution_data(bnd, datapath, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape_as(u_pred)
                 boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
 
     error_bnd_mse_test = torch.mean(torch.cat(boundary_err_sq))
@@ -297,4 +324,4 @@ if __name__ == "__main__":
         random.seed(seed)
 
 
-        exp_dict_list = poisson_2d_classic_experiment(grid_res)
+        exp_dict_list = poisson_2d_irregular_geometry_experiment(grid_res)
