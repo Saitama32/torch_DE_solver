@@ -550,7 +550,7 @@ class PlotLossSurface:
                       grid_losses[loss_type], grid_xx, grid_yy, rec_grid_models)
 
     def save_equation_loss_surface(self, u_exact_test: torch.Tensor, grid_test: torch.Tensor, grid: torch.Tensor,
-                                   domain: Domain, equation: Equation, boundaries: Conditions, PINN_layers: list):
+                                   domain: Domain, equation: Equation, boundaries: Conditions, PINN_layers: list, log_key: bool = False):
         """save_low_dimensional_loss_surface.
         Args:
             grid (torch.Tensor): discretization of comp-l domain.
@@ -562,6 +562,12 @@ class PlotLossSurface:
         raw_states_dict = {}
         self.grid_test = grid_test
         self.u_exact_test = u_exact_test
+        def _safe_log1p_signed(x, eps=1e-12):
+            """
+            sign(x) * log(1 + |x|) для torch.Tensor или чисел.
+            """
+
+            return torch.sign(x) * torch.log1p(torch.abs(x) + eps)
 
         trajectory_losses, original_trajectory_losses, trajectory_coordinates = \
             self.get_coordinates_and_losses_of_trajectories(grid, domain, equation, boundaries, PINN_layers)
@@ -585,7 +591,10 @@ class PlotLossSurface:
 
             if self.solver_models is None:
                 torch.save(self.states_dict, self.path_to_plot_model_directory + '/loss_surface_data.pt')
-            
-            raw_states_dict[loss_type] = raw_state['grid_losses']
+            if log_key:
+                print(f"Applying log transformation to {loss_type} for better visualization.")
+                raw_states_dict[loss_type] = _safe_log1p_signed(raw_state['grid_losses'])
+            else:
+                raw_states_dict[loss_type] = raw_state['grid_losses']
 
         return raw_states_dict
