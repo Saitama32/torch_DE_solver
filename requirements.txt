@@ -10,7 +10,7 @@ gym
 #==1.6.0
 # 1.15.2
 seaborn
-torch >=2.0
+torch >=2.8
 autodocsumm
 typing
 SALib

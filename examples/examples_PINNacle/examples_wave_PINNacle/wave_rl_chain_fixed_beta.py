@@ -7,15 +7,17 @@ Created on Mon May 31 12:33:44 2021
 from comet_ml import start
 from comet_ml.integration.pytorch import log_model
 
-experiment = start(
-  api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_final",
-  workspace="saitama32"
-)
+
+# experiment = start(
+#   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
+#   project_name="rlpinn_final",
+#   workspace="saitama32"
+# )
 
 
 import torch
 import os
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 import sys
 import time
 import numpy as np
@@ -32,11 +34,11 @@ from tedeous.device import solver_device
 from tedeous.utils import exact_solution_data
 
 
-experiment.log_parameters({
-    "param": "v_1",
-    "reward_function": "v_2",
-    "description": "farm_transitions_Burgers_1d_basic_RL_optimizer"
-})
+# experiment.log_parameters({
+#     "param": "v_1",
+#     "reward_function": "v_2",
+#     "description": "farm_transitions_Burgers_1d_basic_RL_optimizer"
+# })
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 solver_device(device)
@@ -275,15 +277,15 @@ def wave_1d_basic_experiment(x_res, t_res, beta=5):
         "reward_operator_coeff": 1,
         "reward_boundary_coeff": 1,
         "lr": 1e-3,
-        "exp": experiment,
+        "exp": None,
     }
 
     backup_params = {
         "experiment_key" : "7eef2a8539884caaab03e61dac561a68",
     }
 
-    experiment.log_parameters(rl_agent_params)
-    experiment.log_parameters(backup_params)
+    # experiment.log_parameters(rl_agent_params)
+    # experiment.log_parameters(backup_params)
 
     model.train(optimizer,
                 5e5,

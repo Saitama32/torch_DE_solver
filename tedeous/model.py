@@ -662,12 +662,13 @@ class Model():
                         torch.save(entry, file_path)
 
                         # Логируем тот же файл в W&B
-                        rl_agent_params['exp'].log_asset(
-                            file_path,
-                            file_name=f"entry_step_{rl_agent.steps_done}.pt",
-                            step=rl_agent.steps_done,
-                            overwrite=True
-                        )
+                        if rl_agent_params['exp'] is not None:
+                            rl_agent_params['exp'].log_asset(
+                                file_path,
+                                file_name=f"entry_step_{rl_agent.steps_done}.pt",
+                                step=rl_agent.steps_done,
+                                overwrite=True
+                            )
 
                     except Exception as e:
                         print(e)

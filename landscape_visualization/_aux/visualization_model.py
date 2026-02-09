@@ -245,14 +245,15 @@ class VisualizationModel:
             if compile and use_fast_loop:
                 self.AE_model = torch.compile(self.AE_model)
 
-            self.optimizer = optimizer.optimizer_choice(self.mode, self.AE_model)
+            optimizer_ = optimizer.optimizer_choice(self.mode, self.AE_model)
             scheduler = optimizer.scheduler
 
             callbacks = CallbackList(callbacks=callbacks, model=self)
             callbacks.on_train_begin()
 
             rec_weight = float(self.loss_dict["rec"]["weight"])
-            train_step = make_train_cudagraph(self.AE_model, self.optimizer, (B, input_dim), rec_weight)
+            # TODO убрать бачи ваще
+            train_step = make_train_cudagraph(self.AE_model, (B, input_dim), rec_weight)
 
             if self.device.type == "cuda":
                 torch.cuda.synchronize()
@@ -265,12 +266,14 @@ class VisualizationModel:
 
                 # self.AE_model.train()
                 total_loss = 0.0
+                optimizer_.zero_grad(set_to_none=True)
 
-                self.optimizer.zero_grad(set_to_none=False)
-                lr = scheduler.get_last_lr()[0]
-                loss_tensor = train_step(X, lr)
-                if scheduler is not None:
-                    scheduler.step()
+                # self.optimizer.zero_grad(set_to_none=True)
+                # lr = scheduler.get_last_lr()[0]
+                # print(type(lr))
+                loss_tensor = train_step(X)
+                optimizer_.step()
+                scheduler.step(epoch=self.epoch)
 
                 total_loss += float(loss_tensor.detach())
                 self.total_loss = total_loss
@@ -284,6 +287,7 @@ class VisualizationModel:
             print(f"Training completed in {(t1 - t0):.2f} seconds.")
 
             callbacks.on_train_end()
+            self.AE_model.eval()
 
             if solver_models:
                 return self.AE_model
@@ -300,7 +304,7 @@ class VisualizationModel:
                 self.device)
             
 
-        self.optimizer = optimizer.optimizer_choice(self.mode, self.AE_model)
+        optimizer_ = optimizer.optimizer_choice(self.mode, self.AE_model)
 
         scheduler = optimizer.scheduler
         callbacks = CallbackList(callbacks=callbacks, model=self)
@@ -345,7 +349,7 @@ class VisualizationModel:
                 total_loss = 0
 
                 for batch_idx in range(max_batches):
-                    self.optimizer.zero_grad()
+                    optimizer_.zero_grad()
                     losses = {}
 
                     data = {}
@@ -404,7 +408,7 @@ class VisualizationModel:
                     total_loss += loss_total_batch.item()
 
                     loss_total_batch.backward()
-                    self.optimizer.step()
+                    optimizer_.step()
                     scheduler.step(self.epoch + batch_idx / max_batches)
                     # scheduler.step()
             else:
