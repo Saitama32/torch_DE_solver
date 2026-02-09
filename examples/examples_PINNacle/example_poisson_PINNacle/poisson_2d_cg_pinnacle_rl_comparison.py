@@ -52,6 +52,12 @@ def parse_args():
         default=None,
         help="Comet experiment key for backup / resume"
     )
+    parser.add_argument(
+        "--exp_key",
+        type=str,
+        default=None,
+        help="Comet experiment key for comparison runs"
+    )
     return parser.parse_args()
 
 

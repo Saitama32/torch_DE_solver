@@ -8,10 +8,10 @@ NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 
 log_enable="True"
 log_unenable="False"
-exp_key_1= "14471d09f89840959fe9c2dc59b83097"
-exp_key_2= "2e9f5d593dc24017aa8479e9ba158ed1"
-exp_key_3= ""
-exp_key_4= ""
+exp_key_1="14471d09f89840959fe9c2dc59b83097"
+exp_key_2="2e9f5d593dc24017aa8479e9ba158ed1"
+exp_key_3=""
+exp_key_4=""
 
 echo "Обнаружено GPU: $NUM_GPUS"
 
