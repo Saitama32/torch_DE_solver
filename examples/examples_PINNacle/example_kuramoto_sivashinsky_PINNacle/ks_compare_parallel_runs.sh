@@ -1,7 +1,7 @@
 #!/bin/bash
 # Автоматический запуск kuramoto_sivashinsky_chain.py с распределением по GPU
 
-SCRIPT="examples/examples_PINNacle/example_KS_PINNacle/ks_rl_comparison.py"
+SCRIPT="examples/examples_PINNacle/example_kuramoto_sivashinsky_PINNacle/ks_rl_comparison.py"
 
 # Проверяем, сколько доступно GPU
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
