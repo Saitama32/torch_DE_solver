@@ -7,8 +7,8 @@ SCRIPT="examples/examples_PINNacle/example_kuramoto_sivashinsky_PINNacle/ks_rl_c
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 log_enable="True"
 log_unenable="False"
-exp_key_1="4138d625dd504ba9bfc10fbba61b6735"
-exp_key_2="3371e76b5a5342e59d6dbd15a45289ad"
+exp_key_1="f4bdd28a22854bfebb5be3aaf34a01c7"
+exp_key_2="d5793e44870148d79bf72ffd94f98634"
 exp_key_3=""
 exp_key_4=""
 
@@ -22,12 +22,12 @@ fi
 
 if [ "$NUM_GPUS" -eq 1 ]; then
     echo "Запускаем 2 процесса на одной GPU..."
-    CUDA_VISIBLE_DEVICES=0 python "$SCRIPT" --log_key "$log_enable" --exp_key "$exp_key_1"&
-    CUDA_VISIBLE_DEVICES=0 python "$SCRIPT" --log_key "$log_enable" --exp_key "$exp_key_2"&
+    CUDA_VISIBLE_DEVICES=0 python "$SCRIPT" --log_key "$log_unenable" --exp_key "$exp_key_1"&
+    CUDA_VISIBLE_DEVICES=0 python "$SCRIPT" --log_key "$log_unenable" --exp_key "$exp_key_2"&
 elif [ "$NUM_GPUS" -ge 2 ]; then
     echo "Запускаем по 2 процесса на каждую из двух GPU..."
-    CUDA_VISIBLE_DEVICES=0 python "$SCRIPT" --log_key "$log_enable" --exp_key "$exp_key_1"&
-    CUDA_VISIBLE_DEVICES=1 python "$SCRIPT" --log_key "$log_enable" --exp_key "$exp_key_2"&
+    CUDA_VISIBLE_DEVICES=0 python "$SCRIPT" --log_key "$log_unenable" --exp_key "$exp_key_1"&
+    CUDA_VISIBLE_DEVICES=1 python "$SCRIPT" --log_key "$log_unenable" --exp_key "$exp_key_2"&
 else
     echo "⚠️ Найдено более 2 GPU, но используется только первые две."
     CUDA_VISIBLE_DEVICES=0 python "$SCRIPT" &
