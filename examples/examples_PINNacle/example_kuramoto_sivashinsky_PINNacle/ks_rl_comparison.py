@@ -222,7 +222,9 @@ def kuramoto_sivashinsky_experiment(grid_res, exp_key=None):
         "every_epoch": 100,
         "learning_rate": 5e-4,
         "resume": True,
-        "finetune_AE_model": False
+        "finetune_AE_model": False,
+        "log_key": False
+
     }
 
     loss_surface_params = {
