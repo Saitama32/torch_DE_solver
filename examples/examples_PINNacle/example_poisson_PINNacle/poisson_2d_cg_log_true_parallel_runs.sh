@@ -8,8 +8,8 @@ NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 
 log_enable="True"
 log_unenable="False"
-exp_key_1="6715b0e42acf40f0883ec8f648ddd154"
-exp_key_2="cb2c49bea17147b49a321d00e7174a4c"
+exp_key_1="5358eb806ed54af8b1d37bde87f3dde3"
+exp_key_2="e0fb7ca627b54476b6385992217f2531"
 exp_key_3=""
 exp_key_4=""
 
