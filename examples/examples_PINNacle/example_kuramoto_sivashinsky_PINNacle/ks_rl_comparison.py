@@ -36,12 +36,19 @@ experiment.log_parameters({
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--log_key",
+        type=str,
+        default=None,
+        help="Comet experiment key for backup / resume"
+    )
+    parser.add_argument(
         "--exp_key",
         type=str,
         default=None,
         help="Comet experiment key for comparison runs"
     )
     return parser.parse_args()
+
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 solver_device(device)
@@ -53,7 +60,7 @@ beta = 100 / 16**2
 gamma = 100 / 16**4
 
 
-def kuramoto_sivashinsky_experiment(grid_res, exp_key=None):
+def kuramoto_sivashinsky_experiment(grid_res, exp_key=None, log_key=None):
     exp_dict_list = []
 
     x_min, x_max = 0, 2 * np.pi
@@ -223,7 +230,7 @@ def kuramoto_sivashinsky_experiment(grid_res, exp_key=None):
         "learning_rate": 5e-4,
         "resume": True,
         "finetune_AE_model": False,
-        "log_key": False
+        "log_key": log_key
 
     }
 
@@ -273,6 +280,7 @@ def kuramoto_sivashinsky_experiment(grid_res, exp_key=None):
         "reward_boundary_coeff": 1,
         "lr": 1e-3,
         "exp": experiment,
+        "log_key": log_key,
     }
 
     comparison_params = {
@@ -429,4 +437,4 @@ if __name__ == "__main__":
         random.seed(seed)
 
 
-        exp_dict_list = kuramoto_sivashinsky_experiment(grid_res, exp_key=args.exp_key)
+        exp_dict_list = kuramoto_sivashinsky_experiment(grid_res, exp_key=args.exp_key, log_key=args.log_key)
