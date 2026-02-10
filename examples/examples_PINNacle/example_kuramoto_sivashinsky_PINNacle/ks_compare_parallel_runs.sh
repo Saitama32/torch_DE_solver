@@ -5,8 +5,8 @@ SCRIPT="examples/examples_PINNacle/example_kuramoto_sivashinsky_PINNacle/ks_rl_c
 
 # Проверяем, сколько доступно GPU
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
-exp_key_1="2e9f5d593dc24017aa8479e9ba158ed1"
-exp_key_2="65041c24ee16441aa9764d1ef406b5e7"
+exp_key_1="02c3de1f20d44fd08d71bbd823e64d66"
+exp_key_2="6ed12ac1e9f0402c94cf18fc16c961f4"
 exp_key_3=""
 exp_key_4=""
 
