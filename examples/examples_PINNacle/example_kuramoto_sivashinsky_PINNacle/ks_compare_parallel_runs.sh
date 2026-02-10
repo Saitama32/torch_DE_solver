@@ -7,8 +7,8 @@ SCRIPT="examples/examples_PINNacle/example_kuramoto_sivashinsky_PINNacle/ks_rl_c
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 log_enable="True"
 log_unenable="False"
-exp_key_1="b70c444c658f4ee4ba2685b1a5ff63b1"
-exp_key_2="b6cf4d108f284f13983e38b8bddf6d1d"
+exp_key_1="89987c848d81433dbb788f8784ba5d42"
+exp_key_2="678a39e67da7413b878f3750f1cc2116"
 exp_key_3=""
 exp_key_4=""
 
