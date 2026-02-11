@@ -7,11 +7,11 @@ from tedeous.RL_utils.load_transitions_into_buffer_pickle import load_transition
 
 
 # === Настройки ===
-WORKSPACE = "saitama32"
-PROJECT_NAME = "rlpinn-ks-farm-transitions"  # укажи свой проект
+WORKSPACE = "WORKSPACE"
+PROJECT_NAME = "PROJECT_NAME"  # укажи свой проект
 # MAX_EXPERIMENTS = 15  # можно изменить при необходимости
 
-api = API(api_key="aP71fQTYPNqfsYWvudPPmoBl5")  # или просто API()
+api = API(api_key="api")  # или просто API()
 
 
 # === Вспомогательные функции ===
@@ -55,7 +55,6 @@ def is_crashed(exp):
 
 
 # === Основная функция ===
-def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None, tolerance = 0.0, prev_tol=0.0, use_log_state=False) -> PrioritizedReplayBuffer:
 def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None, tolerance = 0.0, prev_tol=0.0, use_log_state=False) -> PrioritizedReplayBuffer:
     """Собирает все переходы из не-crashed экспериментов проекта и возвращает заполненный PrioritizedReplayBuffer."""
     print("🔍 Получаем эксперименты из Comet...")

@@ -2,11 +2,10 @@ from comet_ml import start
 from comet_ml.integration.pytorch import log_model
 
 experiment = start(
-  api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_burgers_final",
-  workspace="saitama32"
+  api_key="api_key",
+  project_name="project_name",
+  workspace="workspace"
 )
-
 
 import torch
 import os

@@ -3,11 +3,11 @@ import torch
 import io
 
 # === Настройки ===
-WORKSPACE = "saitama32"
-PROJECT_NAME = "rlpinn"
+WORKSPACE = "WORKSPACE"
+PROJECT_NAME = "PROJECT_NAME"
 
 
-api = API(api_key="aP71fQTYPNqfsYWvudPPmoBl5")  # или просто API()
+api = API(api_key="api")  # или просто API()
 # experiment_key = "9da803bf471942d68069d835e2f95651"
 step=None
 
