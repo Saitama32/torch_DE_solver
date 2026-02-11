@@ -56,6 +56,7 @@ def is_crashed(exp):
 
 # === Основная функция ===
 def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None, tolerance = 0.0, prev_tol=0.0, use_log_state=False) -> PrioritizedReplayBuffer:
+def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None, tolerance = 0.0, prev_tol=0.0, use_log_state=False) -> PrioritizedReplayBuffer:
     """Собирает все переходы из не-crashed экспериментов проекта и возвращает заполненный PrioritizedReplayBuffer."""
     print("🔍 Получаем эксперименты из Comet...")
     experiments = list(api.get_experiments(workspace=WORKSPACE, project_name=PROJECT_NAME))
@@ -151,6 +152,9 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
     all_transitions = shift_done_rewards(all_transitions,  done = -1, shift_value= -5)
     # --- Добавление delta loss ---
     all_entries = add_delta_to_all_entries(all_transitions)
+
+    if use_log_state:
+        apply_log_transform_to_transitions(all_entries)
 
     if use_log_state:
         apply_log_transform_to_transitions(all_entries)
@@ -364,6 +368,44 @@ def truncate_success_chains(transitions, current_tol=0.0608023, prev_tol= 0.0607
     
     return cleaned
 
+
+def _safe_log1p_signed(x, eps=1e-12):
+    """
+    sign(x) * log(1 + |x|) для torch.Tensor или чисел.
+    """
+
+    return torch.sign(x) * torch.log1p(torch.abs(x) + eps)
+
+
+def _apply_log_transform_to_state_dict_noextra(state_dict, keys=None, eps=1e-12):
+    """
+    Модифицирует state_dict in-place.
+    НЕ добавляет новых ключей, не меняет структуру.
+    - keys=None => логарифмируем ВСЕ числовые/тензорные поля.
+    """
+    if not isinstance(state_dict, dict):
+        return
+
+    if keys is None:
+        keys = [k for k, v in state_dict.items()
+                if torch.is_tensor(v) or isinstance(v, (int, float))]
+
+    for k in keys:
+        if k in state_dict:
+            v = state_dict[k]
+            if torch.is_tensor(v) or isinstance(v, (int, float)):
+                state_dict[k] = _safe_log1p_signed(v, eps=eps)
+
+
+def apply_log_transform_to_transitions(transitions, state_keys=None, eps=1e-12):
+    """
+    transitions: list[dict] где каждый dict имеет 'state' и 'next_state'
+    Лог-трансформ к state/next_state. Никаких новых ключей не добавляем.
+    """
+    print(f"\n🔧 Применяем лог-трансформацию к состояниям")
+    for tr in transitions:
+        _apply_log_transform_to_state_dict_noextra(tr.get("state"), keys=state_keys, eps=eps)
+        _apply_log_transform_to_state_dict_noextra(tr.get("next_state"), keys=state_keys, eps=eps)
 
 def _safe_log1p_signed(x, eps=1e-12):
     """
