@@ -1,3 +1,4 @@
+
 import torch
 import os
 import sys
@@ -5,18 +6,18 @@ import numpy as np
 import time
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(project_root)
 
 from tedeous.data import Domain, Conditions, Equation
 from tedeous.model import Model
-from tedeous.callbacks import adaptive_lambda, cache, early_stopping, plot
+from tedeous.callbacks import cache, early_stopping, plot
 from tedeous.optimizers.optimizer import Optimizer
 from tedeous.device import solver_device
 from tedeous.utils import exact_solution_data
 
 solver_device('gpu')
-datapath = "../../PINNacle_data/poisson_manyarea.npy"
-
+data_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../PINNacle_data/poisson_manyarea.npy"))
 
 def poisson_2d_many_subdomains_experiment(grid_res):
     exp_dict_list = []
@@ -35,8 +36,11 @@ def poisson_2d_many_subdomains_experiment(grid_res):
     freq = 2
     block_size = np.array([(x_max - x_min + 2e-5) / split[0], (y_max - y_min + 2e-5) / split[1]])
 
-    a_cof = np.load("../../PINNacle_data/poisson_a_coef.npy")
-    f_cof = np.load("../../PINNacle_data/poisson_f_coef.npy").reshape(split[0], split[1], freq, freq)
+    a_coeff_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../PINNacle_data/poisson_a_coef.npy"))
+    f_coeff_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../PINNacle_data/poisson_f_coef.npy"))
+
+    a_cof = np.load(a_coeff_file)
+    f_cof = np.load(f_coeff_file).reshape(split[0], split[1], freq, freq)
 
     boundaries = Conditions()
 
@@ -179,16 +183,16 @@ def poisson_2d_many_subdomains_experiment(grid_res):
                           img_dim='2d',
                           scatter_flag=False)
 
-    optimizer = Optimizer('Adam', {'lr': 1e-3})
+    optimizer = Optimizer('Adam', {'lr': 1e-3, 'betas': (0.9, 0.999)})
 
-    model.train(optimizer, 5e5, save_model=True, callbacks=[cb_cache, cb_es, cb_plots])
+    model.train(optimizer, 2e4, save_model=True, callbacks=[cb_cache, cb_es, cb_plots])
 
     end = time.time()
 
     grid = domain.build('NN').to('cuda')
     net = net.to('cuda')
 
-    exact = exact_solution_data(grid, datapath, pde_dim_in, pde_dim_out).reshape(-1, 1)
+    exact = exact_solution_data(grid, data_file, pde_dim_in, pde_dim_out).reshape(-1, 1)
     net_predicted = net(grid)
 
     error_rmse = torch.sqrt(torch.mean((exact - net_predicted) ** 2))
@@ -211,7 +215,7 @@ nruns = 10
 
 exp_dict_list = []
 
-for grid_res in range(50, 501, 50):
+for grid_res in range(100, 201, 100):
     for _ in range(nruns):
         exp_dict_list.append(poisson_2d_many_subdomains_experiment(grid_res))
 

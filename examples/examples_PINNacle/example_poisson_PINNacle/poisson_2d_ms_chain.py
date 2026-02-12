@@ -3,7 +3,7 @@ from comet_ml.integration.pytorch import log_model
 
 experiment = start(
   api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_poisson_2d_ms_tolerance",
+  project_name="rlpinn_poisson_2d_ms_pinnacle_tolerance",
   workspace="saitama32"
 )
 
@@ -26,7 +26,7 @@ from tedeous.utils import exact_solution_data
 experiment.log_parameters({
     "param": "v_1",
     "reward_function": "v_2",
-    "description": "farm_transitions_poisson_2d_cg_RL_optimizer"
+    "description": "farm_transitions_poisson_2d_ms_RL_optimizer"
 })
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -60,122 +60,11 @@ def poisson_2d_many_subdomains_experiment(grid_res):
     freq = 2
     block_size = np.array([(x_max - x_min + 2e-5) / split[0], (y_max - y_min + 2e-5) / split[1]])
 
-    a_cof = np.load(datapath_a_cof)
-    f_cof = np.load(datapath_f_cof).reshape(split[0], split[1], freq, freq)
+    a_coeff_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../PINNacle_data/poisson_a_coef.npy"))
+    f_coeff_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../PINNacle_data/poisson_f_coef.npy"))
 
-    # --- torch tensors for coefficients (keep on GPU) ---
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    a_t = torch.as_tensor(a_cof, dtype=torch.float32, device=device)  # shape зависит от файла
-    f_t = torch.as_tensor(f_cof, dtype=torch.float32, device=device)  # (sx, sy, freq, freq)
-
-    dx = (x_max - x_min) / split[0]
-    dy = (y_max - y_min) / split[1]
-
-    sx, sy = split
-
-    def dom_and_local(grid: torch.Tensor):
-        """
-        grid: (N,2) on GPU
-        returns:
-        ix, iy: (N,) long indices of block
-        rx, ry: (N,1) local coords in [0,1] inside the block
-        """
-        x = grid[:, 0]
-        y = grid[:, 1]
-
-        ix = torch.floor((x - x_min) / dx).long()
-        iy = torch.floor((y - y_min) / dy).long()
-
-        # clamp to be safe on boundary
-        ix = ix.clamp(0, sx - 1)
-        iy = iy.clamp(0, sy - 1)
-
-        x0 = x_min + ix.float() * dx
-        y0 = y_min + iy.float() * dy
-
-        rx = ((x - x0) / dx).unsqueeze(1)  # (N,1)
-        ry = ((y - y0) / dy).unsqueeze(1)  # (N,1)
-
-        return ix, iy, rx, ry
-    
-    def a_and_grads(grid: torch.Tensor):
-        """
-        Returns:
-        a  (N,1)
-        ax (N,1) = ∂a/∂x
-        ay (N,1) = ∂a/∂y
-        """
-        ix, iy, rx, ry = dom_and_local(grid)
-
-        # Case A: a = a0 + ax_hat*rx + ay_hat*ry  (linear in local coords)
-        # a_t shape: (sx,sy,3) where [:,:,0]=a0, [:,:,1]=ax_hat, [:,:,2]=ay_hat
-        if a_t.ndim == 3 and a_t.shape[-1] == 3:
-            p = a_t[ix, iy]  # (N,3)
-            a0 = p[:, 0:1]
-            ax_hat = p[:, 1:2]
-            ay_hat = p[:, 2:3]
-
-            a = a0 + ax_hat * rx + ay_hat * ry
-            ax = ax_hat / dx
-            ay = ay_hat / dy
-            return a, ax, ay
-
-        # Case B (optional): bilinear on local square:
-        # a = a00 + a10*rx + a01*ry + a11*rx*ry
-        if a_t.ndim == 3 and a_t.shape[-1] == 4:
-            p = a_t[ix, iy]  # (N,4)
-            a00 = p[:, 0:1]
-            a10 = p[:, 1:2]
-            a01 = p[:, 2:3]
-            a11 = p[:, 3:4]
-
-            a = a00 + a10*rx + a01*ry + a11*rx*ry
-            ax = (a10 + a11*ry) / dx
-            ay = (a01 + a11*rx) / dy
-            return a, ax, ay
-
-        # Fallback: piecewise-constant
-        # a_t shape (sx,sy)
-        a = a_t[ix, iy].unsqueeze(1)
-        ax = torch.zeros_like(a)
-        ay = torch.zeros_like(a)
-        return a, ax, ay
-
-
-    def get_a(grid):
-        a, _, _ = a_and_grads(grid.to(device))
-        return a
-
-
-    def get_ax(grid):
-        _, ax, _ = a_and_grads(grid.to(device))
-        return ax
-
-
-    def get_ay(grid):
-        _, _, ay = a_and_grads(grid.to(device))
-        return ay
-    
-    i_idx = torch.arange(freq, device=device, dtype=torch.float32).view(1, freq, 1)
-    j_idx = torch.arange(freq, device=device, dtype=torch.float32).view(1, 1, freq)
-
-    def get_f(grid: torch.Tensor):
-        grid = grid.to(device)
-        ix, iy, rx, ry = dom_and_local(grid)
-
-        coef = f_t[ix, iy]  # (N,freq,freq)
-
-        # sin(pi*i*rx)*sin(pi*j*ry)
-        sinx = torch.sin(torch.pi * i_idx * rx.view(-1,1,1))  # (N,freq,1)
-        siny = torch.sin(torch.pi * j_idx * ry.view(-1,1,1))  # (N,1,freq)
-        basis = sinx * siny                                   # (N,freq,freq)
-
-        fval = torch.sum(coef * basis, dim=(1,2), keepdim=True)  # (N,1)
-        return fval
-
-
-
+    a_cof = np.load(a_coeff_file)
+    f_cof = np.load(f_coeff_file).reshape(split[0], split[1], freq, freq)
 
     boundaries = Conditions()
 
@@ -199,30 +88,77 @@ def poisson_2d_many_subdomains_experiment(grid_res):
         return bop
 
     bop_x_min = bop_generation(1, -1, 0)
-    boundaries.robin({'x': x_min, 'y': [y_min, y_max]}, operator=bop_x_min, value=0.0)
+    boundaries.robin({'x': x_min, 'y': [y_min, y_max]}, operator=bop_x_min, value=lambda grid: -grid[:, 1])
 
     bop_x_max = bop_generation(1, 1, 0)
-    boundaries.robin({'x': x_max, 'y': [y_min, y_max]}, operator=bop_x_max, value=0.0)
+    boundaries.robin({'x': x_max, 'y': [y_min, y_max]}, operator=bop_x_max, value=lambda grid: -grid[:, 1])
 
     bop_y_min = bop_generation(1, -1, 1)
-    boundaries.robin({'x': [x_min, x_max], 'y': y_min}, operator=bop_y_min, value=0.0)
+    boundaries.robin({'x': [x_min, x_max], 'y': y_min}, operator=bop_y_min, value=lambda grid: -grid[:, 1])
 
     bop_y_max = bop_generation(1, 1, 1)
-    boundaries.robin({'x': [x_min, x_max], 'y': y_max}, operator=bop_y_max, value=0.0)
+    boundaries.robin({'x': [x_min, x_max], 'y': y_max}, operator=bop_y_max, value=lambda grid: -grid[:, 1])
 
+    def compute_domain(grid):
+        reduced_x = (grid - np.array([x_min, y_min]) + 1e-5)
+        dom = np.floor(reduced_x / block_size).astype("int32")
+        res = reduced_x - dom * block_size
+        return dom, res
+
+    def compute_a_coeff(grid):
+        dom, _ = compute_domain(grid)
+        return a_cof[dom[0], dom[1]]
+
+    a_coeff = np.vectorize(compute_a_coeff, signature="(2)->()")
+
+    def compute_forcing_term(grid):
+        dom, res = compute_domain(grid)
+
+        def f_fn(coef):
+            ans = coef[0, 0]
+            for i in range(coef.shape[0]):
+                for j in range(coef.shape[1]):
+                    tmp = np.sin(np.pi * np.array((i, j)) * (res / block_size))
+                    ans += coef[i, j] * tmp[0] * tmp[1]
+            return ans
+
+        return f_fn(f_cof[dom[0], dom[1]])
+
+    forcing_term = np.vectorize(compute_forcing_term, signature="(2)->()")
+
+    def get_a_coeff(grid):
+        device_origin = grid.device
+        grid = grid.detach().cpu()
+        return torch.Tensor(a_coeff(grid)).unsqueeze(dim=-1).to(device_origin)
+
+    def get_forcing_term(grid):
+        device_origin = grid.device
+        grid = grid.detach().cpu()
+        return torch.Tensor(forcing_term(grid)).unsqueeze(dim=-1).to(device_origin)
 
     equation = Equation()
 
     # Operator: −∇(a(x)∇u) = f(x, y)
 
     poisson = {
-    '-a * d2u/dx2': {'coeff': lambda g: -get_a(g),  'term': [0, 0], 'pow': 1, 'var': 0},
-    '-ax * du/dx':  {'coeff': lambda g: -get_ax(g), 'term': [0],    'pow': 1, 'var': 0},
-
-    '-a * d2u/dy2': {'coeff': lambda g: -get_a(g),  'term': [1, 1], 'pow': 1, 'var': 0},
-    '-ay * du/dy':  {'coeff': lambda g: -get_ay(g), 'term': [1],    'pow': 1, 'var': 0},
-
-    '-f(x,y)':      {'coeff': lambda g: -get_f(g),  'term': [None], 'pow': 0, 'var': 0},
+        'a * d2u/dx2':
+            {
+                'coeff': get_a_coeff,
+                'term': [0, 0],
+                'pow': 1,
+            },
+        'a * d2u/dy2':
+            {
+                'coeff': get_a_coeff,
+                'term': [1, 1],
+                'pow': 1,
+            },
+        'f(x, y)':
+            {
+                'coeff': get_forcing_term,
+                'term': [None],
+                'pow': 0
+            }
     }
 
 
