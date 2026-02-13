@@ -362,7 +362,7 @@ def poisson_2d_many_subdomains_experiment(grid_res):
     rl_agent_params = {
         "n_save_models": 10,
         "n_trajectories": 1000,
-        "tolerance": 3.79691889513976,
+        "tolerance": 1.4,
         "prev_tol": 0.0,
         "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
         "min_loss_change": 1e-7,
