@@ -60,11 +60,8 @@ def poisson_2d_many_subdomains_experiment(grid_res):
     freq = 2
     block_size = np.array([(x_max - x_min + 2e-5) / split[0], (y_max - y_min + 2e-5) / split[1]])
 
-    a_coeff_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../PINNacle_data/poisson_a_coef.npy"))
-    f_coeff_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../PINNacle_data/poisson_f_coef.npy"))
-
-    a_cof = np.load(a_coeff_file)
-    f_cof = np.load(f_coeff_file).reshape(split[0], split[1], freq, freq)
+    a_cof = np.load(datapath_a_cof)
+    f_cof = np.load(datapath_f_cof).reshape(split[0], split[1], freq, freq)
 
     boundaries = Conditions()
 
