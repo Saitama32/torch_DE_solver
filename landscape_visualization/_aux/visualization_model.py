@@ -251,13 +251,17 @@ class VisualizationModel:
             callbacks = CallbackList(callbacks=callbacks, model=self)
             callbacks.on_train_begin()
 
-            rec_weight = float(self.loss_dict["rec"]["weight"])
+            rec_weight = self.loss_dict["rec"]["weight"]
             # TODO убрать бачи ваще
+            print("grad enabled:", torch.is_grad_enabled())
             train_step = make_train_cudagraph(self.AE_model, (B, input_dim), rec_weight)
 
             if self.device.type == "cuda":
                 torch.cuda.synchronize()
             t0 = time.perf_counter()
+
+            print("X mean/std =", X.mean().item(), X.std().item(), "maxabs", X.abs().max().item())
+            print("grad enabled:", torch.is_grad_enabled())
 
             for self.epoch in range(epochs):
                 # как в медленной ветке: stop_training проверяется через callbacks
@@ -266,12 +270,22 @@ class VisualizationModel:
 
                 # self.AE_model.train()
                 total_loss = 0.0
-                optimizer_.zero_grad(set_to_none=True)
+                # optimizer_.zero_grad(set_to_none=True)
 
-                # self.optimizer.zero_grad(set_to_none=True)
+                optimizer_.zero_grad(set_to_none=False)
                 # lr = scheduler.get_last_lr()[0]
                 # print(type(lr))
                 loss_tensor = train_step(X)
+                # if self.epoch % every_epoch == 0:
+                #     print("lr =", optimizer_.param_groups[0]["lr"])
+                #     with torch.no_grad():
+                #         p = next(self.AE_model.parameters())
+                #         print("param_abs_mean =", p.abs().mean().item())
+                #     gn = 0.0
+                #     for p in self.AE_model.parameters():
+                #         if p.grad is not None:
+                #             gn += p.grad.detach().float().norm().item()
+                #     print("grad_norm_sum =", gn)
                 optimizer_.step()
                 scheduler.step(epoch=self.epoch)
 

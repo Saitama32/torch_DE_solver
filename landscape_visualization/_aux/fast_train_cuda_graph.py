@@ -18,7 +18,7 @@ def _warmup_alloc(model, static_x, rec_weight):
         loss = rec_loss_function(x_recon, static_x, z).float() * rec_weight
         loss.backward()
         # optim.step()
-    torch.cuda.synchronize()
+    # torch.cuda.synchronize()
 
 
 def make_train_cudagraph(model, batch_shape, rec_weight, device="cuda", dtype=torch.float32):
@@ -33,7 +33,7 @@ def make_train_cudagraph(model, batch_shape, rec_weight, device="cuda", dtype=to
 
     g = torch.cuda.CUDAGraph()
     pool = torch.cuda.graph_pool_handle()
-    torch.cuda.synchronize()
+    # torch.cuda.synchronize()
 
     with torch.cuda.graph(g, pool):
         # optim.zero_grad(set_to_none=True)
