@@ -1,7 +1,7 @@
 #!/bin/bash
 # Автоматический запуск poisson_2d_cg_chain.py с распределением по GPU
 
-SCRIPT="examples/examples_PINNacle/example_poisson_PINNacle/poissin_2d_ms_chain.py"
+SCRIPT="examples/examples_PINNacle/example_poisson_PINNacle/poisson_2d_cg_chain.py"
 
 # Проверяем, сколько доступно GPU
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
