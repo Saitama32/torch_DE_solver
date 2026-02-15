@@ -39,7 +39,7 @@ datapath_f_cof = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../
 
 
 def poisson_2d_many_subdomains_experiment(grid_res):
-    log_key = False
+    log_key = True
     exp_dict_list = []
 
     x_min, x_max = -10, 10
