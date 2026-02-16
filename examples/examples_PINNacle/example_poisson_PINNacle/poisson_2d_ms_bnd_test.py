@@ -1,11 +1,6 @@
 from comet_ml import start
 from comet_ml.integration.pytorch import log_model
 
-experiment = start(
-  api_key="aP71fQTYPNqfsYWvudPPmoBl5",
-  project_name="rlpinn_poisson_2d_ms_comparison",
-  workspace="saitama32"
-)
 
 import torch
 import os
@@ -27,11 +22,6 @@ from tedeous.device import solver_device
 from tedeous.utils import exact_solution_data
 from tedeous.error_calc_utils import boundary_report
 
-experiment.log_parameters({
-    "param": "v_1",
-    "reward_function": "v_2",
-    "description": "comparison_poisson_2d_ms_RL_optimizer"
-})
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 solver_device(device)
@@ -88,7 +78,6 @@ def poisson_2d_many_subdomains_experiment(grid_res, log_key=None, exp_key=None):
             pde_dim_out,
             t_dim_flag=("t" in list(domain.variable_dict.keys())),
         )
-
 
     split = (5, 5)
     freq = 2
@@ -306,135 +295,9 @@ def poisson_2d_many_subdomains_experiment(grid_res, log_key=None, exp_key=None):
                                          info_string_every=10,
                                          randomize_parameter=1e-4)
 
-    optimizer = {
-        'Adam':{
-            'lr':[1e-2, 1e-3, 1e-4],
-            'epochs':[100, 1000, 2500]
-        },
-        'LBFGS':{
-            'lr':[1, 5e-1, 1e-1],
-            'epochs':[100, 500, 1500]
-        },
-        'PSO':{
-            'lr':[0.0, 1e-3, 1e-4],
-            'epochs':[100, 200, 300]
-        },
-    }
+    optimizer = Optimizer('Adam', {'lr': 1e-3})
 
-    AE_model_params = {
-        "mode": "NN",
-        "num_of_layers": 3,
-        "layers_AE": [
-            991,
-            125,
-            15
-        ],
-        "num_models": None,
-        "from_last": False,
-        "prefix": "model-",
-        "every_nth": 1,
-        "grid_step": 0.1,
-        "d_max_latent": 2,
-        "anchor_mode": "circle",
-        "rec_weight": 10000.0,
-        "anchor_weight": 0.0,
-        "lastzero_weight": 0.0,
-        "polars_weight": 0.0,
-        "wellspacedtrajectory_weight": 0.0,
-        "gridscaling_weight": 0.0,
-        "device": device
-    }
-
-    AE_train_params = {
-        "first_RL_epoch_AE_params": {
-            "epochs": 10000,
-            "patience_scheduler": 4000,
-            "cosine_scheduler_patience": 1200,
-        },
-        "other_RL_epoch_AE_params": {
-            "epochs": 20000,
-            "patience_scheduler": 4000,
-            "cosine_scheduler_patience": 1200,
-        },
-        "batch_size": 32,
-        "every_epoch": 100,
-        "learning_rate": 5e-4,
-        "resume": True,
-        "finetune_AE_model": False,
-        "log_key": log_key
-    }
-
-    loss_surface_params = {
-        "loss_types": ["loss_total", "loss_oper", "loss_bnd"],
-        "every_nth": 1,
-        "num_of_layers": 3,
-        "layers_AE": [
-            991,
-            125,
-            15
-        ],
-        "batch_size": 32,
-        "num_models": None,
-        "from_last": False,
-        "prefix": "model-",
-        "loss_name": "loss_total",
-        "x_range": [-1.25, 1.25, 25],
-        "vmax": -1.0,
-        "vmin": -1.0,
-        "vlevel": 30.0,
-        "key_models": None,
-        "key_modelnames": None,
-        "density_type": "CKA",
-        "density_p": 2,
-        "density_vmax": -1,
-        "density_vmin": -1,
-        "colorFromGridOnly": True,
-        "img_dir": img_dir
-    }
-
-    rl_agent_params = {
-        "n_save_models": 10,
-        "n_trajectories": 1000,
-        "tolerance": 3.79691889513976,
-        "prev_tol": 0.0,
-        "stuck_threshold": 10,  # Число эпох без значительного изменения прогресса
-        "min_loss_change": 1e-7,
-        "min_grad_norm": 1e-5,
-        "rl_buffer_size": 10000,
-        "rl_batch_size": 32,
-        "n_transitions_reinit" : 1000,
-        "gamma": 0.9,
-        "rl_reward_method": "absolute",
-        "exact_solution": datapath,
-        "reward_operator_coeff": 1,
-        "reward_boundary_coeff": 1,
-        "lr": 5e-4,
-        "exp": experiment,
-        "log_key": log_key,
-    }
-
-    comparison_params = {
-        "seed": seed, 
-        "total_epochs": 7000,
-        "experiment_key": exp_key
-    }
-
-    experiment.log_parameters(rl_agent_params)
-    experiment.log_parameters(comparison_params)
-
-    model.train(optimizer,
-                5e5,
-                save_model=True,
-                callbacks=[cb_es],
-                rl_agent_params=rl_agent_params,
-                models_concat_flag=False,
-                model_name='rl_optimization_agent',
-                equation_params=equation_params,
-                AE_model_params=AE_model_params,
-                AE_train_params=AE_train_params,
-                loss_surface_params=loss_surface_params,
-                comparison_param=comparison_params)
-
+    model.train(optimizer, 300, save_model=True, callbacks=[cb_es])
     net = model.net.to(device)
     grid_test = grid_test.to(device)
     u_exact = exact_solution_data(grid, datapath, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape(-1, 1)
@@ -444,6 +307,33 @@ def poisson_2d_many_subdomains_experiment(grid_res, log_key=None, exp_key=None):
     error_op_rmse_train = torch.sqrt(torch.mean(diff ** 2))
     variable_dict = domain.variable_dict
     bconds = boundaries.build(variable_dict)
+    # boundary_err_sq = []
+    # with torch.no_grad():
+    #     for b in bconds:
+    #         btype = b.get("type", None)
+
+    #         # оставляем только сравнение u на границе
+    #         if btype != "dirichlet" and btype != "periodic":
+    #             continue
+
+    #         if btype == "periodic":
+    #             bnd_left, bnd_right = b["bnd"]
+    #             for bnd in (bnd_left, bnd_right):
+    #                 bnd = bnd.to(device)
+    #                 u_pred = net(bnd)
+    #                 u_ex = exact_solution_data(bnd, datapath, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape_as(u_pred)
+    #                 boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+    #         else:
+    #             bnd = b["bnd"].to(device)
+    #             u_pred = net(bnd)
+    #             u_ex = exact_solution_data(bnd, datapath, pde_dim_in, pde_dim_out, t_dim_flag='t' in list(domain.variable_dict.keys())).to(device).reshape_as(u_pred)
+    #             boundary_err_sq.append((u_pred - u_ex).reshape(-1) ** 2)
+
+    # error_bnd_mse_train = torch.mean(torch.cat(boundary_err_sq))
+
+
+    # error_bnd_rmse_train = torch.sqrt(torch.mean(torch.cat(boundary_err_sq)))
+
     report = boundary_report(
         net=net,
         grid_for_dtype=grid,
@@ -455,6 +345,7 @@ def poisson_2d_many_subdomains_experiment(grid_res, log_key=None, exp_key=None):
     error_bnd_mse_train = report["exact_u_mse"]
     error_bnd_rmse_train = report["exact_u_rmse"]
     print({k: float(v) for k, v in report.items()})
+
     error_rmse_train_full = error_op_rmse_train + error_bnd_rmse_train
 
     error_l2re_train = torch.sqrt(torch.sum(
@@ -478,6 +369,8 @@ def poisson_2d_many_subdomains_experiment(grid_res, log_key=None, exp_key=None):
     )
     error_bnd_mse_test = report["exact_u_mse"]
     error_bnd_rmse_test = report["exact_u_rmse"]
+
+  
     error_rmse_test_full = error_op_rmse_test + error_bnd_rmse_test
     error_l2re_test = torch.sqrt(torch.sum(
         (u_exact_test - net(grid_test)) ** 2) / torch.sum(u_exact_test ** 2))
@@ -524,7 +417,6 @@ def poisson_2d_many_subdomains_experiment(grid_res, log_key=None, exp_key=None):
 
 
 if __name__ == "__main__":
-    args = parse_args()
     grid_res = 100
     seeds = [123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]   # можно расширить список
 
@@ -537,4 +429,4 @@ if __name__ == "__main__":
         random.seed(seed)
 
 
-        exp_dict_list = poisson_2d_many_subdomains_experiment(grid_res, log_key=args.log_key, exp_key=args.exp_key)
+        exp_dict_list = poisson_2d_many_subdomains_experiment(grid_res)
