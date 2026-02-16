@@ -22,9 +22,9 @@ from tedeous.RL_utils.logger import log_priority_to_comet
 import tempfile
 
 
-EPS_START = 0.5
+EPS_START = 0.05
 EPS_END = 0.05
-EPS_DECAY = 400
+EPS_DECAY = 100
 TAU = 0.01
 
 
@@ -650,8 +650,8 @@ class DQNAgent:
         sample = random.random()
         eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * self.steps_done / EPS_DECAY)
         self.steps_done += 1
-        sample = 2 # hardcoded for testing purposes
-        eps_threshold = 1 # hardcoded for testing purpose
+        # sample = 2 # hardcoded for testing purposes
+        # eps_threshold = 1 # hardcoded for testing purpose
 
         if self.steps_done < self.slot_bootstrap_steps:
             eps_threshold = self.slot_bootstrap_eps
