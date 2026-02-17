@@ -151,7 +151,6 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
         all_transitions = truncate_success_chains(all_transitions, current_tol=tolerance, prev_tol= prev_tol)
 
     if mark_states:
-
         all_transitions = add_proj_mark(all_transitions, proj_name)
 
     # --- Сдвиг наград для успешных переходов ---
@@ -415,9 +414,8 @@ def add_proj_mark(all_transitions, proj_name):
     marked = []
     for tr in all_transitions:
         tr["pde"] = proj_name
-        marked.extend(tr)
 
-    return marked
+    return all_transitions
 
 # === Точка входа ===
 # if __name__ == "__main__":
