@@ -55,10 +55,13 @@ def is_crashed(exp):
 
 
 # === Основная функция ===
-def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None, tolerance = 0.0, prev_tol=0.0, use_log_state=False) -> PrioritizedReplayBuffer:
+def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration_grater_hours = 1, save_dir=None, tolerance = 0.0, prev_tol=0.0, use_log_state=False, proj_name=None, mark_states=None) -> PrioritizedReplayBuffer:
     """Собирает все переходы из не-crashed экспериментов проекта и возвращает заполненный PrioritizedReplayBuffer."""
     print("🔍 Получаем эксперименты из Comet...")
-    experiments = list(api.get_experiments(workspace=WORKSPACE, project_name=PROJECT_NAME))
+    if proj_name is not None:
+        experiments = list(api.get_experiments(workspace=WORKSPACE, project_name=proj_name))
+    else:
+        experiments = list(api.get_experiments(workspace=WORKSPACE, project_name=PROJECT_NAME))
     # valid_experiments = [exp for exp in experiments if not is_crashed(exp)]
     experiments_sorted = sorted(experiments, key=get_end_time, reverse=True)
     experiments_sorted_duration = [
@@ -146,6 +149,10 @@ def collect_all_comet_transitions(replay_buffer=None, max_exps_last=10, duration
     # prev_tol= 0.060776
     if tolerance > prev_tol and prev_tol != 0.0:
         all_transitions = truncate_success_chains(all_transitions, current_tol=tolerance, prev_tol= prev_tol)
+
+    if mark_states:
+
+        all_transitions = add_proj_mark(all_transitions, proj_name)
 
     # --- Сдвиг наград для успешных переходов ---
     all_transitions = shift_done_rewards(all_transitions,  done = -1, shift_value= -5)
@@ -403,6 +410,14 @@ def apply_log_transform_to_transitions(transitions, state_keys=None, eps=1e-12):
         _apply_log_transform_to_state_dict_noextra(tr.get("state"), keys=state_keys, eps=eps)
         _apply_log_transform_to_state_dict_noextra(tr.get("next_state"), keys=state_keys, eps=eps)
 
+
+def add_proj_mark(all_transitions, proj_name):
+    marked = []
+    for tr in all_transitions:
+        tr["pde"] = proj_name
+        marked.extend(tr)
+
+    return marked
 
 # === Точка входа ===
 # if __name__ == "__main__":
