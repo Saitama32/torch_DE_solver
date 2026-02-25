@@ -21,6 +21,7 @@ import time
 import numpy as np
 import random
 import tempfile
+import argparse
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -46,6 +47,22 @@ solver_device(device)
 
 base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 print(base_dir)
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--log_key",
+        type=str,
+        default=None,
+        help="Comet experiment key for backup / resume"
+    )
+    parser.add_argument(
+        "--exp_key",
+        type=str,
+        default=None,
+        help="Comet experiment key for comparison runs"
+    )
+    return parser.parse_args()
 
 
 def exact_func(grid, beta=4):
@@ -288,7 +305,8 @@ def wave_1d_basic_experiment(seed, x_res, t_res, beta=4, log_key=False):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 7000,
-        "experiment_key": "6d6292bae815427a905114fa6d43dce8"
+        "experiment_key": "7f7a91cef55d4aeba0e509024977456b",
+        "multi_pde_comparison": True,
     }
 
     experiment.log_parameters(rl_agent_params)

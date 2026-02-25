@@ -15,6 +15,7 @@ import time
 import numpy as np
 import random
 import tempfile
+import argparse
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -41,6 +42,22 @@ solver_device(device)
 data_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../PINNacle_data/burgers1d.npy"))
 
 mu = 0.01 / np.pi
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--log_key",
+        type=str,
+        default=None,
+        help="Comet experiment key for backup / resume"
+    )
+    parser.add_argument(
+        "--exp_key",
+        type=str,
+        default=None,
+        help="Comet experiment key for comparison runs"
+    )
+    return parser.parse_args()
 
 
 def burgers_1d_experiment(x_res, t_res, log_key=False):
@@ -270,24 +287,25 @@ def burgers_1d_experiment(x_res, t_res, log_key=False):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 7000,
-        "experiment_key": "ddffd76215e040fbb99499d95695b214"
+        "experiment_key": "7f7a91cef55d4aeba0e509024977456b",
+        "multi_pde_comparison": True,
     }
 
     experiment.log_parameters(rl_agent_params)
     experiment.log_parameters(comparison_params)
 
-    # model.train(optimizer,
-    #             5e5,
-    #             save_model=True,
-    #             callbacks=[cb_es],
-    #             rl_agent_params=rl_agent_params,
-    #             models_concat_flag=False,
-    #             model_name='rl_optimization_agent',
-    #             equation_params=equation_params,
-    #             AE_model_params=AE_model_params,
-    #             AE_train_params=AE_train_params,
-    #             loss_surface_params=loss_surface_params,
-    #             comparison_param=comparison_params)
+    model.train(optimizer,
+                5e5,
+                save_model=True,
+                callbacks=[cb_es],
+                rl_agent_params=rl_agent_params,
+                models_concat_flag=False,
+                model_name='rl_optimization_agent',
+                equation_params=equation_params,
+                AE_model_params=AE_model_params,
+                AE_train_params=AE_train_params,
+                loss_surface_params=loss_surface_params,
+                comparison_param=comparison_params)
     
     net = model.net.to(device)
     grid_test = grid_test.to(device)

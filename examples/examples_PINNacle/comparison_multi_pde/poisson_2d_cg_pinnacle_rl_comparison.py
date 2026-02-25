@@ -313,7 +313,8 @@ def poisson_2d_irregular_geometry_experiment(grid_res, log_key=None, exp_key=Non
     comparison_params = {
         "seed": seed, 
         "total_epochs": 7000,
-        "experiment_key": exp_key
+        "experiment_key": exp_key,
+        "multi_pde_comparison": True,
     }
 
     experiment.log_parameters(rl_agent_params)

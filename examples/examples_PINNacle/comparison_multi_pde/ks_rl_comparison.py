@@ -296,7 +296,8 @@ def kuramoto_sivashinsky_experiment(grid_res, exp_key=None, log_key=None):
     comparison_params = {
         "seed": seed, 
         "total_epochs": 7000,
-        "experiment_key": exp_key
+        "experiment_key": exp_key,
+        "multi_pde_comparison": True,
     }
 
     experiment.log_parameters(rl_agent_params)

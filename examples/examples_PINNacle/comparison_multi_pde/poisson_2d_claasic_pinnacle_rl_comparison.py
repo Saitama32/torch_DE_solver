@@ -14,6 +14,7 @@ import time
 import numpy as np
 import random
 import tempfile
+import argparse
 
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -38,6 +39,22 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 solver_device(device)
 
 data_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../PINNacle_data/poisson1_cg_data.npy"))
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--log_key",
+        type=str,
+        default=None,
+        help="Comet experiment key for backup / resume"
+    )
+    parser.add_argument(
+        "--exp_key",
+        type=str,
+        default=None,
+        help="Comet experiment key for comparison runs"
+    )
+    return parser.parse_args()
+
 def poisson_2d_classic_experiment(grid_res, log_key=False):
     exp_dict_list = []
 
@@ -213,7 +230,8 @@ def poisson_2d_classic_experiment(grid_res, log_key=False):
         "every_epoch": 100,
         "learning_rate": 5e-4,
         "resume": True,
-        "finetune_AE_model": False
+        "finetune_AE_model": False,
+        "log_key": log_key
     }
 
     loss_surface_params = {
@@ -262,12 +280,14 @@ def poisson_2d_classic_experiment(grid_res, log_key=False):
         "reward_boundary_coeff": 1,
         "lr": 5e-4,
         "exp": experiment,
+        "log_key": log_key,
     }
 
     comparison_params = {
         "seed": seed, 
         "total_epochs": 7000,
-        "experiment_key": "8dbe18ad737d481291323d8564ef4536"
+        "experiment_key": "7f7a91cef55d4aeba0e509024977456b",
+        "multi_pde_comparison": True,
     }
 
     experiment.log_parameters(rl_agent_params)
