@@ -586,64 +586,23 @@ class Model():
 
                     # input weights (for generate state) and loss (for calculate reward) to step method
                     # first getting current models and current losses
-                    next_state, reward, done, _ = env.step()
+                    env.set_step_context(
+                        prev_state=state,
+                        step_i=i,
+                        same_opt_streak=same_opt_streak,
+                        is_model=is_model,
+                        rl_opt_step=rl_agent.opt_step,
+                        prev_reward_scalar=None if prev_reward == -1 else prev_reward,
+                    )
 
-                    # Информация о разности состояний в начале оптимизации и в конце
-                    raw_delta = next_state["loss_total"] - state["loss_total"]
+                    next_state, reward_shaped, done, info = env.step()
 
-                    delta = torch.sign(raw_delta) * torch.log1p(torch.abs(raw_delta))
-                    delta = delta / (delta.abs().max() + 1e-6)
-                    delta = delta.clamp(-1, 1)
+                    # prev_reward — теперь просто хранит reward_scalar из info
+                    prev_reward = info["reward_scalar"]
 
-                    next_state["delta"] = delta
-                    
-                    reward_scalar = reward.item()  # предполагаем, что reward — скаляр
-
-                    opt_model_i = -1
-                    reward_model_i = -1
-                    if prev_reward == -1:
-                        reward_model_i = reward_scalar 
-                        # opt_model_i = rl_agent.opt_step
-                        # pass
-                    elif is_model and prev_reward != -1:
-                        opt_model_i = rl_agent.opt_step
-                        reward_model_i = reward_scalar - prev_reward
-                    else:
-                        # pass
-                        reward_model_i = reward_scalar - prev_reward
-                    prev_reward = reward_scalar
-
-                                        # ==== ШТРАФ ЗА ДЛИННУЮ СЕРИЮ ОДНОГО ОПТИМИЗАТОРА ====
-                    REPEAT_K = 3   # порог длины серии
-                    REPEAT_PENALTY = 0.5  # штраф за каждый шаг после порога
-
-                    if same_opt_streak > REPEAT_K:
-                        # сколько шагов мы уже "пересидели" порог
-                        over = same_opt_streak - REPEAT_K
-                        # можно сделать просто -REPEAT_PENALTY, но чуть сильнее:
-                        repeat_pen = REPEAT_PENALTY * over
-                        reward_model_i -= repeat_pen
-                        # при желании можно залогировать repeat_pen куда-нибудь
-
-                    reward_model_i_raw = reward_model_i
-                    reward_model_i -= 0.05 * i
-
-                    if done == 1:
-                        reward_model_i += 10 # поменяли на меньшую награду
-                    elif done == 0:
-                        # reward -= 0.01 * i
-                        pass
-                    elif done == -1:
-                        reward_model_i = -5
-
-                    # if i != 0:
-                    #     rl_agent.push_memory((state, next_state, action_raw, reward))
-                    # else:
-                    #     rl_agent.steps_done -= 1
-                    rl_agent.push_memory((state, next_state, action_raw, float(reward_model_i), \
-                                          done, float(reward_model_i), opt_model_i))
-                    # for _ in range(32):
-                    #     rl_agent.push_memory((state, next_state, dqn_class, reward))
+                    # reward уже финальный (reward_model_i)
+                    rl_agent.push_memory((state, next_state, action_raw, float(reward_shaped.item()),
+                                        done, float(reward_shaped.item()), info["opt_model_i"]))
 
 
                     try:
@@ -653,15 +612,15 @@ class Model():
                             'state': state,
                             'next_state': next_state,
                             'action': action_raw,
-                            'reward': float(reward),
+                            'reward': float(info["reward_scalar"]),
                             'done': done, 
-                            'reward_model_raw': float(reward_model_i_raw),
-                            'reward_model': float(reward_model_i),
-                            'opt_model_i': opt_model_i
+                            'reward_model_raw': float(reward_shaped.item()),
+                            'reward_model': float(reward_shaped.item()),
+                            'opt_model_i': info["opt_model_i"]
                         }
                         torch.save(entry, file_path)
 
-                        # Логируем тот же файл в W&B
+                        # Логируем тот же файл в comet
                         rl_agent_params['exp'].log_asset(
                             file_path,
                             file_name=f"entry_step_{rl_agent.steps_done}.pt",
@@ -684,10 +643,10 @@ class Model():
                     #     done = -1
 
                     state = next_state
-                    total_reward += reward_model_i
+                    total_reward += float(reward_shaped.item())
 
-                    print(f'\nCurrent reward after {action["type"]} optimizer: {reward}.\n'
-                          f'Reward after taking prev reward and penalty: {reward_model_i}\n'
+                    print(f'\nCurrent reward after {action["type"]} optimizer: {info["reward_scalar"]}.\n'
+                          f'Reward after taking prev reward and penalty: {reward_shaped}\n'
                           f'Total reward after using {", ".join(optimizers_history)} '
                           f'{"optimizers" if len(optimizers_history) > 1 else "optimizer"}: {total_reward}.\n'
                           f'\ndone = {done}')

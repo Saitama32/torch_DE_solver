@@ -1,6 +1,7 @@
 import gym
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 
 from typing import List, Union
 
@@ -83,6 +84,29 @@ class EnvRLOptimizer(gym.Env):
         self.counter = 1
         self.n_save_models = n_save_models
 
+        # reward shaping config (можешь вынести наружу)
+        self.repeat_k = 3
+        self.repeat_penalty = 0.5
+        self.time_penalty = 0.05
+        self.done_bonus = 10.0
+        self.fail_penalty = -5.0
+
+        # step context (будем заполнять из training loop)
+        self._ctx = {}
+        self._prev_state = None
+
+    
+    def set_step_context(self, *, prev_state, step_i, same_opt_streak,
+                         is_model, rl_opt_step=None, prev_reward_scalar=None):
+            self._prev_state = prev_state
+            self._ctx = dict(
+                step_i=step_i,
+                same_opt_streak=same_opt_streak,
+                is_model=is_model,
+                rl_opt_step=rl_opt_step,
+                prev_reward_scalar=prev_reward_scalar,
+            )
+
     def reset(self):
         """Reset environment - load error surface, reset history to zero, select starting point."""
         self.current_reward = self.reward_history[-1]
@@ -118,24 +142,77 @@ class EnvRLOptimizer(gym.Env):
         self.plot_loss_surface = PlotLossSurface(**self.loss_surface_params)
         self.plot_loss_surface.counter = self.counter
 
-        self.raw_states_dict = self.plot_loss_surface.save_equation_loss_surface(*self.equation_params, log_key=self.AE_train_params['log_key'])
+        # 1) next_state + базовый reward (как было)
+        self.raw_states_dict = self.plot_loss_surface.save_equation_loss_surface(
+            *self.equation_params, log_key=self.AE_train_params['log_key']
+        )
 
-        if len(self.reward_history) == 0:
-            prev_reward = 0
-        else:
-            prev_reward = self.reward_history[-1]
-            # min(self.loss_history[-10:]) if len(self.loss_history) > 9 else self.loss_history[-1]
+        prev_reward_env = 0 if len(self.reward_history) == 0 else self.reward_history[-1]
+        base_reward = compute_reward(self.reward_params, prev_reward_env, method=self.reward_method) + self.rl_penalty
 
-        self.current_reward = compute_reward(
-            self.reward_params, prev_reward, method=self.reward_method
-        ) + self.rl_penalty
-
+        self.current_reward = base_reward
         self.reward_history.append(self.current_reward)
         self.reward_history = self.reward_history[-5:]
 
-        done = (abs(self.current_reward.item()) < self.tolerance) + self.rl_penalty
+        success = abs(self.current_reward.item()) < self.tolerance
+        if self.rl_penalty == -1:
+            done = -1
+        elif success:
+            done = 1
+        else:
+            done = 0
 
-        return self.raw_states_dict, self.current_reward, done, {}
+        # 2) delta (как у тебя снаружи)
+        if self._prev_state is not None and "loss_total" in self.raw_states_dict and "loss_total" in self._prev_state:
+            raw_delta = self.raw_states_dict["loss_total"] - self._prev_state["loss_total"]
+            delta = torch.sign(raw_delta) * torch.log1p(torch.abs(raw_delta))
+            delta = delta / (delta.abs().max() + 1e-6)
+            delta = delta.clamp(-1, 1)
+            self.raw_states_dict["delta"] = delta
+
+        # 3) reward_model_i (полная твоя логика)
+        ctx = self._ctx
+        reward_scalar = float(base_reward.item()) if hasattr(base_reward, "item") else float(base_reward)
+
+        prev_reward_scalar = ctx.get("prev_reward_scalar", None)
+        is_model = bool(ctx.get("is_model", False))
+        step_i = int(ctx.get("step_i", 0))
+        same_opt_streak = int(ctx.get("same_opt_streak", 0))
+        rl_opt_step = ctx.get("rl_opt_step", None)
+
+        opt_model_i = -1
+        if prev_reward_scalar is None:
+            reward_model_i = reward_scalar
+        else:
+            if is_model:
+                opt_model_i = int(rl_opt_step) if rl_opt_step is not None else -1
+            reward_model_i = reward_scalar - float(prev_reward_scalar)
+
+        # repeat penalty
+        if same_opt_streak > self.repeat_k:
+            over = same_opt_streak - self.repeat_k
+            reward_model_i -= self.repeat_penalty * over
+
+        reward_model_i_raw = reward_model_i
+
+        # time penalty
+        reward_model_i -= self.time_penalty * step_i
+
+        # done shaping
+        if done == 1:
+            reward_model_i += self.done_bonus
+        elif done == -1:
+            reward_model_i = self.fail_penalty
+
+        info = {
+            "reward_scalar": reward_scalar,
+            "reward_model_raw": float(reward_model_i_raw),
+            "reward_model": float(reward_model_i),
+            "opt_model_i": int(opt_model_i),
+        }
+
+        # Возвращаем сразу shaped reward (как тебе нужно для replay buffer)
+        return self.raw_states_dict, torch.tensor(reward_model_i), done, info
 
     def render(self):
         """Display the current error and convergence history."""
