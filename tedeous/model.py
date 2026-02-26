@@ -825,7 +825,7 @@ class Model():
 
                 # NEW: обновление глобально лучшей модели по loss
                 if total_rmse < best_rmse_overall: 
-                    print(f"New BEST total_rmse = {best_rmse_overall} after {action['type']} for {action['epochs']} epochs, step {n_steps}")  
+                    print(f"New BEST total_rmse = {total_rmse} after {action['type']} for {action['epochs']} epochs, step {n_steps}")  
                     best_rmse_overall = float(total_rmse)                  
                     best_model_overall = copy.deepcopy(self.net)   
 
